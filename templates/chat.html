@@ -123,9 +123,9 @@
         <!-- 输入区域 -->
         <div class="input-container">
             <div class="input-wrapper">
-                <textarea 
-                    id="messageInput" 
-                    class="message-input" 
+                <textarea
+                    id="messageInput"
+                    class="message-input"
                     placeholder="输入消息..."
                     rows="1"
                     onkeypress="handleKeyPress(event)"
@@ -139,6 +139,21 @@
                 </button>
             </div>
             <p class="input-hint">按 Enter 发送，Shift + Enter 换行</p>
+
+            <!-- 生成学习计划按钮（仅在询问阶段显示） -->
+            <div class="generate-plan-container" id="generatePlanContainer" style="display: none;">
+                <button class="btn btn-primary btn-block" onclick="generateStudyPlan()" id="generatePlanBtn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                        <polyline points="10 9 9 9 8 9"/>
+                    </svg>
+                    生成学习计划
+                </button>
+                <p class="plan-hint">当AI表示已收集足够信息时，点击此按钮生成个性化学习计划</p>
+            </div>
         </div>
     </main>
 </div>
@@ -225,12 +240,6 @@ let tokenThreshold = 0;
 document.addEventListener('DOMContentLoaded', () => {
     loadWorkspaceData();
     loadFileTree();
-    
-    // 检查URL参数
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('phase') === 'inquiry') {
-        startInquiry();
-    }
 });
 
 // 加载工作区数据
@@ -247,20 +256,28 @@ async function loadWorkspaceData() {
             updateContextIndicator();
             updatePhaseIndicator();
             
-            // 如果有历史消息，显示它们
+            // 如果有历史消息，显示它们并初始化inquiryHistory
             if (data.messages && data.messages.length > 0) {
                 document.getElementById('welcomeMessage').style.display = 'none';
                 data.messages.forEach(msg => {
                     if (msg.role !== 'system') {
                         appendMessage(msg.role, msg.content);
+                        // 添加到inquiryHistory（用于生成学习计划）
+                        if (currentPhase === 'inquiry' || currentPhase === 'init') {
+                            inquiryHistory.push({ role: msg.role, content: msg.content });
+                        }
                     }
                 });
             }
             
-            // 如果已经在教学阶段，显示学习计划链接
+            // 根据阶段显示相应内容
             if (currentPhase === 'teaching') {
+                // 教学阶段：显示学习计划链接
                 document.getElementById('studyPlanLink').style.display = 'block';
                 document.getElementById('welcomeMessage').style.display = 'none';
+            } else if (currentPhase === 'init' || currentPhase === 'inquiry') {
+                // 初始化或询问阶段：开始询问
+                startInquiry();
             }
         }
     } catch (error) {
@@ -305,26 +322,36 @@ function updatePhaseIndicator() {
             item.classList.remove('active');
         }
     });
+
+    // 更新生成学习计划按钮的显示状态
+    const generatePlanContainer = document.getElementById('generatePlanContainer');
+    if (currentPhase === 'inquiry') {
+        generatePlanContainer.style.display = 'block';
+    } else {
+        generatePlanContainer.style.display = 'none';
+    }
 }
 
 // 开始询问阶段
 function startInquiry() {
     currentPhase = 'inquiry';
     updatePhaseIndicator();
-    
-    // 添加AI的初始消息
-    const welcomeMsg = `你好！我是你的AI学习助手。你想学习"{{ theme }}"，这是个很棒的选择！
+
+    // 只有在没有历史消息时才发送初始消息
+    if (inquiryHistory.length === 0) {
+        const welcomeMsg = `你好！我是你的AI学习助手。你想学习"{{ theme }}"，这是个很棒的选择！
 
 为了给你制定最合适的学习计划，我想先了解几个情况：
 
 1. **你的学习目标是什么？** 是想入门了解、系统学习，还是解决某个具体问题？
 
 请随意回答，我会根据你的情况继续提问。`;
-    
-    setTimeout(() => {
-        appendMessage('assistant', welcomeMsg);
-        inquiryHistory.push({ role: 'assistant', content: welcomeMsg });
-    }, 500);
+
+        setTimeout(() => {
+            appendMessage('assistant', welcomeMsg);
+            inquiryHistory.push({ role: 'assistant', content: welcomeMsg });
+        }, 500);
+    }
 }
 
 // 发送消息
@@ -352,7 +379,7 @@ async function sendMessage() {
 // 发送询问阶段消息
 async function sendInquiryMessage(message) {
     isGenerating = true;
-    showLoading(true);
+    showToolStatus('AI正在思考...', true);
     
     const responseDiv = appendMessage('assistant', '', true);
     let fullResponse = '';
@@ -388,7 +415,7 @@ async function sendInquiryMessage(message) {
                         if (data.error) {
                             responseDiv.innerHTML = `<span class="error">错误: ${data.error}</span>`;
                             isGenerating = false;
-                            showLoading(false);
+                            showToolStatus('', false);
                             return;
                         }
                         
@@ -400,13 +427,6 @@ async function sendInquiryMessage(message) {
                         
                         if (data.done) {
                             inquiryHistory.push({ role: 'assistant', content: fullResponse });
-                            
-                            // 检查是否应该结束询问阶段
-                            if (shouldEndInquiry(fullResponse)) {
-                                setTimeout(() => {
-                                    generateStudyPlan();
-                                }, 1000);
-                            }
                         }
                     } catch (e) {
                         console.error('解析错误:', e);
@@ -419,7 +439,7 @@ async function sendInquiryMessage(message) {
         console.error(error);
     } finally {
         isGenerating = false;
-        showLoading(false);
+        showToolStatus('', false);
     }
 }
 
@@ -440,7 +460,6 @@ function shouldEndInquiry(response) {
 
 // 生成学习计划
 async function generateStudyPlan() {
-    showLoading(true);
     showToolStatus('正在生成学习计划...', true);
     
     try {
@@ -472,7 +491,6 @@ async function generateStudyPlan() {
         showNotification('网络错误', 'error');
         console.error(error);
     } finally {
-        showLoading(false);
         showToolStatus('', false);
     }
 }
@@ -480,7 +498,7 @@ async function generateStudyPlan() {
 // 发送教学阶段消息
 async function sendTeachingMessage(message) {
     isGenerating = true;
-    showLoading(true);
+    showToolStatus('AI正在思考...', true);
     
     const responseDiv = appendMessage('assistant', '', true);
     let fullResponse = '';
@@ -514,7 +532,7 @@ async function sendTeachingMessage(message) {
                         if (data.error) {
                             responseDiv.innerHTML = `<span class="error">错误: ${data.error}</span>`;
                             isGenerating = false;
-                            showLoading(false);
+                            showToolStatus('', false);
                             return;
                         }
                         
@@ -557,7 +575,6 @@ async function sendTeachingMessage(message) {
         console.error(error);
     } finally {
         isGenerating = false;
-        showLoading(false);
         showToolStatus('', false);
     }
 }
@@ -970,31 +987,48 @@ function scrollToBottom() {
 }
 
 // 侧边栏切换
-const sidebarToggle = document.getElementById('sidebarToggle');
-const sidebarToggleMobile = document.getElementById('sidebarToggleMobile');
-const sidebar = document.getElementById('sidebar');
-
-if (sidebarToggle) {
-    sidebarToggle.addEventListener('click', () => {
-        sidebar.classList.toggle('collapsed');
-    });
-}
-
-if (sidebarToggleMobile) {
-    sidebarToggleMobile.addEventListener('click', () => {
-        sidebar.classList.toggle('mobile-open');
-    });
-}
-
-// 加载动画
-function showLoading(show) {
-    const overlay = document.getElementById('loading-overlay');
-    if (show) {
-        overlay.classList.remove('hidden');
-    } else {
-        overlay.classList.add('hidden');
+document.addEventListener('DOMContentLoaded', () => {
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    const sidebarToggleMobile = document.getElementById('sidebarToggleMobile');
+    const sidebar = document.getElementById('sidebar');
+    
+    if (sidebarToggle && sidebar) {
+        sidebarToggle.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            sidebar.classList.toggle('collapsed');
+            
+            // 保存状态到localStorage
+            const isCollapsed = sidebar.classList.contains('collapsed');
+            localStorage.setItem('sidebarCollapsed', isCollapsed);
+        });
     }
-}
+    
+    if (sidebarToggleMobile && sidebar) {
+        sidebarToggleMobile.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            sidebar.classList.toggle('mobile-open');
+        });
+    }
+    
+    // 恢复侧边栏状态（仅桌面端）
+    if (window.innerWidth > 768) {
+        const wasCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+        if (wasCollapsed && sidebar) {
+            sidebar.classList.add('collapsed');
+        }
+    }
+    
+    // 点击外部关闭移动端侧边栏
+    document.addEventListener('click', (e) => {
+        if (window.innerWidth <= 768 && sidebar && sidebar.classList.contains('mobile-open')) {
+            if (!sidebar.contains(e.target) && !e.target.closest('.sidebar-toggle-mobile')) {
+                sidebar.classList.remove('mobile-open');
+            }
+        }
+    });
+});
 
 // 清空对话
 function clearChat() {

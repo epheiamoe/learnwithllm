@@ -704,6 +704,24 @@ body {
 
 .sidebar.collapsed {
     width: var(--sidebar-collapsed);
+    min-width: var(--sidebar-collapsed);
+}
+
+.sidebar.collapsed .sidebar-title,
+.sidebar.collapsed .context-indicator,
+.sidebar.collapsed .phase-indicator,
+.sidebar.collapsed .file-tree-container,
+.sidebar.collapsed .study-plan-link {
+    display: none;
+}
+
+.sidebar.collapsed .sidebar-header {
+    justify-content: center;
+    padding: 1rem 0.5rem;
+}
+
+.sidebar.collapsed .sidebar-toggle {
+    transform: rotate(180deg);
 }
 
 .sidebar-header {
@@ -1831,20 +1849,73 @@ body {
 }
 
 /* ========================================
+   生成学习计划按钮样式
+   ======================================== */
+.generate-plan-container {
+    margin-top: 1.5rem;
+    padding: 1.25rem;
+    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
+    text-align: center;
+    animation: fadeIn 0.5s ease;
+}
+
+.generate-plan-container .btn {
+    padding: 0.875rem 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    transition: all var(--transition-normal);
+}
+
+.generate-plan-container .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.generate-plan-container .btn svg {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+.plan-hint {
+    margin-top: 0.75rem;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ========================================
    打印样式
    ======================================== */
 @media print {
     .navbar,
     .sidebar,
     .input-container,
-    .message-actions {
+    .message-actions,
+    .generate-plan-container {
         display: none !important;
     }
-    
+
     .chat-main {
         height: auto;
     }
-    
+
     .messages-container {
         overflow: visible;
     }

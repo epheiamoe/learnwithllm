@@ -198,17 +198,37 @@ class WorkspaceManager:
             if os.path.exists(history_path):
                 with open(history_path, 'r', encoding='utf-8') as f:
                     messages = json.load(f)
-            
+
+            # 读取工作区状态
+            state_path = os.path.join(path, 'workspace_state.json')
+            current_phase = "inquiry"  # 默认值
+            token_count = 0
+            token_threshold = int(config_manager.get_model_max_context(
+                config_manager.get_llm_config().get('default_model', 'gpt-4o')
+            ) * 0.8)
+            compressed_context = ""
+
+            if os.path.exists(state_path):
+                try:
+                    with open(state_path, 'r', encoding='utf-8') as f:
+                        state = json.load(f)
+                        current_phase = state.get('current_phase', 'inquiry')
+                        token_count = state.get('token_count', 0)
+                        token_threshold = state.get('token_threshold', token_threshold)
+                        compressed_context = state.get('compressed_context', '')
+                except Exception as e:
+                    logger.error(f"加载工作区状态失败: {str(e)}")
+
             workspace = Workspace(
                 id=workspace_id,
                 theme=theme,
                 created_at=datetime.fromtimestamp(os.path.getctime(path)).isoformat(),
                 path=path,
-                current_phase="teaching",
+                current_phase=current_phase,
                 messages=messages,
-                token_threshold=int(config_manager.get_model_max_context(
-                    config_manager.get_llm_config().get('default_model', 'gpt-4o')
-                ) * 0.8)
+                token_count=token_count,
+                token_threshold=token_threshold,
+                compressed_context=compressed_context
             )
             
             logger.info(f"从磁盘加载工作区: {workspace_id}")
@@ -254,7 +274,18 @@ class WorkspaceManager:
             history_path = os.path.join(workspace.path, 'history.json')
             with open(history_path, 'w', encoding='utf-8') as f:
                 json.dump(workspace.messages, f, ensure_ascii=False, indent=2)
-            
+
+            # 保存工作区状态（包括阶段信息）
+            state_path = os.path.join(workspace.path, 'workspace_state.json')
+            state = {
+                'current_phase': workspace.current_phase,
+                'token_count': workspace.token_count,
+                'token_threshold': workspace.token_threshold,
+                'compressed_context': workspace.compressed_context
+            }
+            with open(state_path, 'w', encoding='utf-8') as f:
+                json.dump(state, f, ensure_ascii=False, indent=2)
+
             logger.debug(f"工作区已保存: {workspace.id}")
         except Exception as e:
             logger.error(f"保存工作区失败: {str(e)}")
@@ -627,6 +658,12 @@ llm_service = LLMService()
 
 PHASE1_INQUIRY_PROMPT = """You are a learning consultant. Your goal is to understand the user's learning needs thoroughly.
 
+## IMPORTANT RULES:
+1. **DO NOT provide any teaching, explanations, or answers** in this phase
+2. **DO NOT use any tools** - this is inquiry phase only
+3. **DO NOT generate exercises or search for information**
+4. **ONLY ask questions** to gather information for the study plan
+
 Ask precise questions to clarify:
 1. Learning goals - What specific skills or knowledge do they want to gain?
 2. Background - What's their current level and prior knowledge?
@@ -637,7 +674,7 @@ Ask precise questions to clarify:
 Ask ONE question at a time. Wait for the user's response before asking the next.
 Be conversational but focused. Your questions should help build a personalized study plan.
 
-When you have gathered enough information (usually 3-5 questions), indicate that you're ready to create the study plan.
+When you have gathered enough information (usually 3-5 questions), say: "I have enough information now. Please click the 'Generate Study Plan' button to create your personalized learning plan."
 
 Current user input: {user_input}
 """
@@ -749,14 +786,14 @@ def inquiry_chat(workspace_id):
     user_input = data.get('message', '')
     history = data.get('history', [])
     
-    # 构建消息
+    # 构建消息 - 需求询问阶段禁止工具调用
     messages = [
         {'role': 'system', 'content': PHASE1_INQUIRY_PROMPT.format(user_input=user_input)}
     ]
-    
+
     for msg in history:
         messages.append({'role': msg['role'], 'content': msg['content']})
-    
+
     messages.append({'role': 'user', 'content': user_input})
     
     def generate():
