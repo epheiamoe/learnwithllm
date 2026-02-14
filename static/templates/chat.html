@@ -1,0 +1,1054 @@
+{% extends "base.html" %}
+
+{% block title %}{{ theme }} - AI Learning Assistant{% endblock %}
+
+{% block content %}
+<div class="chat-layout">
+    <!-- 侧边栏 -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h3 class="sidebar-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                </svg>
+                工作区
+            </h3>
+            <button class="sidebar-toggle" id="sidebarToggle" title="收起侧边栏">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/>
+                </svg>
+            </button>
+        </div>
+
+        <!-- 上下文指示器 -->
+        <div class="context-indicator">
+            <div class="context-header">
+                <span class="context-label">上下文使用</span>
+                <span class="context-value" id="contextValue">0 / 0</span>
+            </div>
+            <div class="context-bar">
+                <div class="context-fill" id="contextFill" style="width: 0%"></div>
+            </div>
+            <p class="context-hint" id="contextHint">正常</p>
+        </div>
+
+        <!-- 学习阶段指示 -->
+        <div class="phase-indicator" id="phaseIndicator">
+            <div class="phase-item active" data-phase="inquiry">
+                <div class="phase-dot"></div>
+                <span>需求询问</span>
+            </div>
+            <div class="phase-item" data-phase="teaching">
+                <div class="phase-dot"></div>
+                <span>正式教学</span>
+            </div>
+        </div>
+
+        <!-- 文件树 -->
+        <div class="file-tree-container">
+            <h4 class="file-tree-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                </svg>
+                文件
+            </h4>
+            <div class="file-tree" id="fileTree">
+                <div class="file-tree-loading">加载中...</div>
+            </div>
+        </div>
+
+        <!-- 学习计划链接 -->
+        <div class="study-plan-link" id="studyPlanLink" style="display: none;">
+            <button class="btn btn-ghost btn-sm btn-block" onclick="showStudyPlan()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                    <polyline points="10 9 9 9 8 9"/>
+                </svg>
+                查看学习计划
+            </button>
+        </div>
+    </aside>
+
+    <!-- 主聊天区域 -->
+    <main class="chat-main">
+        <!-- 聊天头部 -->
+        <header class="chat-header">
+            <div class="chat-title">
+                <button class="sidebar-toggle-mobile" id="sidebarToggleMobile">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4 6h16M4 12h16M4 18h16"/>
+                    </svg>
+                </button>
+                <h2 id="chatTitle">{{ theme }}</h2>
+            </div>
+            <div class="chat-actions">
+                <button class="btn btn-ghost btn-sm" onclick="clearChat()" title="清空对话">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                </button>
+                <button class="btn btn-ghost btn-sm" onclick="exportChat()" title="导出对话">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- 消息区域 -->
+        <div class="messages-container" id="messagesContainer">
+            <!-- 欢迎消息 -->
+            <div class="welcome-message" id="welcomeMessage">
+                <div class="welcome-icon">👋</div>
+                <h3>开始你的学习之旅</h3>
+                <p>AI助手会先询问几个问题，了解你的学习需求，然后为你制定专属学习计划。</p>
+            </div>
+            <!-- 消息将动态插入这里 -->
+        </div>
+
+        <!-- 工具状态栏 -->
+        <div class="tool-status-bar" id="toolStatusBar" style="display: none;">
+            <div class="tool-status-item">
+                <span class="tool-status-spinner"></span>
+                <span class="tool-status-text" id="toolStatusText">处理中...</span>
+            </div>
+        </div>
+
+        <!-- 输入区域 -->
+        <div class="input-container">
+            <div class="input-wrapper">
+                <textarea 
+                    id="messageInput" 
+                    class="message-input" 
+                    placeholder="输入消息..."
+                    rows="1"
+                    onkeypress="handleKeyPress(event)"
+                    oninput="autoResize(this)"
+                ></textarea>
+                <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="22" y1="2" x2="11" y2="13"/>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                    </svg>
+                </button>
+            </div>
+            <p class="input-hint">按 Enter 发送，Shift + Enter 换行</p>
+        </div>
+    </main>
+</div>
+
+<!-- 学习计划模态框 -->
+<div class="modal modal-large" id="studyPlanModal">
+    <div class="modal-overlay" onclick="hideStudyPlan()"></div>
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>学习计划</h3>
+            <button class="modal-close" onclick="hideStudyPlan()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="markdown-content" id="studyPlanContent">
+                加载中...
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 练习题模态框 -->
+<div class="modal" id="exerciseModal">
+    <div class="modal-overlay" onclick="hideExercise()"></div>
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>练习题</h3>
+            <span class="exercise-difficulty" id="exerciseDifficulty">中等</span>
+            <button class="modal-close" onclick="hideExercise()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="exercise-content" id="exerciseContent">
+                <!-- 动态加载 -->
+            </div>
+            <div class="exercise-result" id="exerciseResult" style="display: none;">
+                <!-- 答题结果 -->
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="hideExercise()">关闭</button>
+            <button class="btn btn-primary" id="submitExerciseBtn" onclick="submitExercise()">提交答案</button>
+        </div>
+    </div>
+</div>
+
+<!-- 文件预览模态框 -->
+<div class="modal modal-large" id="filePreviewModal">
+    <div class="modal-overlay" onclick="hideFilePreview()"></div>
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="filePreviewTitle">文件预览</h3>
+            <button class="modal-close" onclick="hideFilePreview()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <div class="modal-body">
+            <pre class="file-preview-content" id="filePreviewContent"></pre>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 全局状态
+const workspaceId = '{{ workspace_id }}';
+let currentPhase = 'inquiry';
+let inquiryHistory = [];
+let isGenerating = false;
+let currentExercise = null;
+let tokenCount = 0;
+let tokenThreshold = 0;
+
+// 初始化
+document.addEventListener('DOMContentLoaded', () => {
+    loadWorkspaceData();
+    loadFileTree();
+    
+    // 检查URL参数
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('phase') === 'inquiry') {
+        startInquiry();
+    }
+});
+
+// 加载工作区数据
+async function loadWorkspaceData() {
+    try {
+        const response = await fetch(`/api/workspaces/${workspaceId}/messages`);
+        const data = await response.json();
+        
+        if (data.success) {
+            currentPhase = data.phase;
+            tokenCount = data.token_count;
+            tokenThreshold = data.token_threshold;
+            
+            updateContextIndicator();
+            updatePhaseIndicator();
+            
+            // 如果有历史消息，显示它们
+            if (data.messages && data.messages.length > 0) {
+                document.getElementById('welcomeMessage').style.display = 'none';
+                data.messages.forEach(msg => {
+                    if (msg.role !== 'system') {
+                        appendMessage(msg.role, msg.content);
+                    }
+                });
+            }
+            
+            // 如果已经在教学阶段，显示学习计划链接
+            if (currentPhase === 'teaching') {
+                document.getElementById('studyPlanLink').style.display = 'block';
+                document.getElementById('welcomeMessage').style.display = 'none';
+            }
+        }
+    } catch (error) {
+        console.error('加载工作区数据失败:', error);
+    }
+}
+
+// 更新上下文指示器
+function updateContextIndicator() {
+    const percentage = tokenThreshold > 0 ? (tokenCount / tokenThreshold * 100) : 0;
+    const contextValue = document.getElementById('contextValue');
+    const contextFill = document.getElementById('contextFill');
+    const contextHint = document.getElementById('contextHint');
+    
+    const maxContext = Math.round(tokenThreshold / 0.8 / 1000);
+    contextValue.textContent = `${Math.round(tokenCount / 1000)}K / ${maxContext}K`;
+    contextFill.style.width = `${Math.min(percentage, 100)}%`;
+    
+    if (percentage < 50) {
+        contextFill.className = 'context-fill';
+        contextHint.textContent = '正常';
+        contextHint.className = 'context-hint';
+    } else if (percentage < 80) {
+        contextFill.className = 'context-fill warning';
+        contextHint.textContent = '接近阈值';
+        contextHint.className = 'context-hint warning';
+    } else {
+        contextFill.className = 'context-fill danger';
+        contextHint.textContent = '已压缩';
+        contextHint.className = 'context-hint danger';
+    }
+}
+
+// 更新阶段指示器
+function updatePhaseIndicator() {
+    const items = document.querySelectorAll('.phase-item');
+    items.forEach(item => {
+        const phase = item.dataset.phase;
+        if (phase === currentPhase) {
+            item.classList.add('active');
+        } else {
+            item.classList.remove('active');
+        }
+    });
+}
+
+// 开始询问阶段
+function startInquiry() {
+    currentPhase = 'inquiry';
+    updatePhaseIndicator();
+    
+    // 添加AI的初始消息
+    const welcomeMsg = `你好！我是你的AI学习助手。你想学习"{{ theme }}"，这是个很棒的选择！
+
+为了给你制定最合适的学习计划，我想先了解几个情况：
+
+1. **你的学习目标是什么？** 是想入门了解、系统学习，还是解决某个具体问题？
+
+请随意回答，我会根据你的情况继续提问。`;
+    
+    setTimeout(() => {
+        appendMessage('assistant', welcomeMsg);
+        inquiryHistory.push({ role: 'assistant', content: welcomeMsg });
+    }, 500);
+}
+
+// 发送消息
+async function sendMessage() {
+    if (isGenerating) return;
+    
+    const input = document.getElementById('messageInput');
+    const message = input.value.trim();
+    
+    if (!message) return;
+    
+    input.value = '';
+    autoResize(input);
+    
+    appendMessage('user', message);
+    
+    if (currentPhase === 'inquiry') {
+        inquiryHistory.push({ role: 'user', content: message });
+        await sendInquiryMessage(message);
+    } else {
+        await sendTeachingMessage(message);
+    }
+}
+
+// 发送询问阶段消息
+async function sendInquiryMessage(message) {
+    isGenerating = true;
+    showLoading(true);
+    
+    const responseDiv = appendMessage('assistant', '', true);
+    let fullResponse = '';
+    
+    try {
+        const response = await fetch(`/api/workspaces/${workspaceId}/inquiry`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: message,
+                history: inquiryHistory
+            })
+        });
+        
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            const chunk = decoder.decode(value);
+            const lines = chunk.split('\n');
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const dataStr = line.slice(6);
+                    if (dataStr === '[DONE]') continue;
+                    
+                    try {
+                        const data = JSON.parse(dataStr);
+                        
+                        if (data.error) {
+                            responseDiv.innerHTML = `<span class="error">错误: ${data.error}</span>`;
+                            isGenerating = false;
+                            showLoading(false);
+                            return;
+                        }
+                        
+                        if (data.content) {
+                            fullResponse += data.content;
+                            responseDiv.innerHTML = formatMessage(fullResponse);
+                            scrollToBottom();
+                        }
+                        
+                        if (data.done) {
+                            inquiryHistory.push({ role: 'assistant', content: fullResponse });
+                            
+                            // 检查是否应该结束询问阶段
+                            if (shouldEndInquiry(fullResponse)) {
+                                setTimeout(() => {
+                                    generateStudyPlan();
+                                }, 1000);
+                            }
+                        }
+                    } catch (e) {
+                        console.error('解析错误:', e);
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        responseDiv.innerHTML = `<span class="error">网络错误，请重试</span>`;
+        console.error(error);
+    } finally {
+        isGenerating = false;
+        showLoading(false);
+    }
+}
+
+// 判断是否结束询问
+function shouldEndInquiry(response) {
+    const indicators = [
+        '准备制定学习计划',
+        '可以开始制定计划',
+        '已经了解足够',
+        '让我为你制定',
+        'ready to create',
+        'create a study plan'
+    ];
+    
+    const lowerResponse = response.toLowerCase();
+    return indicators.some(ind => lowerResponse.includes(ind.toLowerCase()));
+}
+
+// 生成学习计划
+async function generateStudyPlan() {
+    showLoading(true);
+    showToolStatus('正在生成学习计划...', true);
+    
+    try {
+        const response = await fetch(`/api/workspaces/${workspaceId}/plan`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ history: inquiryHistory })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            currentPhase = 'teaching';
+            updatePhaseIndicator();
+            
+            // 显示教学开始消息
+            const startMsg = `[教学开始] 已根据您的需求制定学习计划，现在开始正式学习...
+
+你可以随时问我问题，我会根据计划引导你学习。点击左侧"查看学习计划"可以随时查看完整的学习大纲。`;
+            
+            appendMessage('assistant', startMsg);
+            document.getElementById('studyPlanLink').style.display = 'block';
+            
+            showNotification('学习计划已生成', 'success');
+        } else {
+            showNotification(data.error || '生成失败', 'error');
+        }
+    } catch (error) {
+        showNotification('网络错误', 'error');
+        console.error(error);
+    } finally {
+        showLoading(false);
+        showToolStatus('', false);
+    }
+}
+
+// 发送教学阶段消息
+async function sendTeachingMessage(message) {
+    isGenerating = true;
+    showLoading(true);
+    
+    const responseDiv = appendMessage('assistant', '', true);
+    let fullResponse = '';
+    let hasExercise = false;
+    
+    try {
+        const response = await fetch(`/api/workspaces/${workspaceId}/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: message })
+        });
+        
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            const chunk = decoder.decode(value);
+            const lines = chunk.split('\n');
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const dataStr = line.slice(6);
+                    if (dataStr === '[DONE]') continue;
+                    
+                    try {
+                        const data = JSON.parse(dataStr);
+                        
+                        if (data.error) {
+                            responseDiv.innerHTML = `<span class="error">错误: ${data.error}</span>`;
+                            isGenerating = false;
+                            showLoading(false);
+                            return;
+                        }
+                        
+                        if (data.content) {
+                            fullResponse += data.content;
+                            responseDiv.innerHTML = formatMessage(fullResponse);
+                            scrollToBottom();
+                        }
+                        
+                        if (data.tool_call) {
+                            showToolStatus(`正在${getToolName(data.tool_call.name)}...`, true);
+                        }
+                        
+                        if (data.status === 'context_compressed') {
+                            showNotification('上下文已自动压缩', 'info');
+                            updateContextIndicator();
+                        }
+                        
+                        if (data.done) {
+                            tokenCount = data.token_count || tokenCount;
+                            updateContextIndicator();
+                            
+                            // 检查是否包含练习题
+                            const exerciseMatch = fullResponse.match(/<tool_call>.*?"name":\s*"generate_exercise".*?<\/tool_call>/);
+                            if (exerciseMatch && !hasExercise) {
+                                hasExercise = true;
+                                setTimeout(() => {
+                                    parseAndShowExercise(exerciseMatch[0]);
+                                }, 500);
+                            }
+                        }
+                    } catch (e) {
+                        console.error('解析错误:', e);
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        responseDiv.innerHTML = `<span class="error">网络错误，请重试</span>`;
+        console.error(error);
+    } finally {
+        isGenerating = false;
+        showLoading(false);
+        showToolStatus('', false);
+    }
+}
+
+// 获取工具名称
+function getToolName(name) {
+    const names = {
+        'generate_exercise': '生成练习题',
+        'web_search': '搜索网络',
+        'file_system': '操作文件'
+    };
+    return names[name] || name;
+}
+
+// 显示工具状态
+function showToolStatus(text, show) {
+    const bar = document.getElementById('toolStatusBar');
+    const statusText = document.getElementById('toolStatusText');
+    
+    if (show && text) {
+        statusText.textContent = text;
+        bar.style.display = 'flex';
+    } else {
+        bar.style.display = 'none';
+    }
+}
+
+// 解析并显示练习题
+function parseAndShowExercise(toolCallStr) {
+    try {
+        const jsonMatch = toolCallStr.match(/<tool_call>(.*?)<\/tool_call>/s);
+        if (jsonMatch) {
+            const toolCall = JSON.parse(jsonMatch[1]);
+            const params = toolCall.parameters;
+            
+            currentExercise = params;
+            showExercise(params);
+        }
+    } catch (e) {
+        console.error('解析练习题失败:', e);
+    }
+}
+
+// 显示练习题
+function showExercise(exercise) {
+    const modal = document.getElementById('exerciseModal');
+    const content = document.getElementById('exerciseContent');
+    const difficulty = document.getElementById('exerciseDifficulty');
+    const result = document.getElementById('exerciseResult');
+    
+    difficulty.textContent = exercise.difficulty === 'easy' ? '简单' : 
+                             exercise.difficulty === 'hard' ? '困难' : '中等';
+    difficulty.className = `exercise-difficulty ${exercise.difficulty}`;
+    result.style.display = 'none';
+    
+    let html = `<div class="exercise-question">${formatMessage(exercise.question)}</div>`;
+    
+    if (exercise.type === 'choice' && exercise.options) {
+        html += '<div class="exercise-options">';
+        exercise.options.forEach((opt, idx) => {
+            html += `
+                <label class="exercise-option">
+                    <input type="radio" name="exercise_answer" value="${idx}">
+                    <span>${escapeHtml(opt)}</span>
+                </label>
+            `;
+        });
+        html += '</div>';
+    } else if (exercise.type === 'fill_blank' && exercise.blanks) {
+        html += '<div class="exercise-blanks">';
+        exercise.blanks.forEach((blank, idx) => {
+            html += `
+                <div class="exercise-blank">
+                    <label>填空 ${idx + 1}:</label>
+                    <input type="text" class="form-input blank-input" data-index="${idx}" placeholder="请输入答案">
+                </div>
+            `;
+        });
+        html += '</div>';
+    } else {
+        html += `
+            <div class="exercise-answer-area">
+                <textarea class="form-input" id="exerciseAnswer" rows="4" placeholder="请输入你的答案"></textarea>
+            </div>
+        `;
+    }
+    
+    content.innerHTML = html;
+    modal.classList.add('active');
+}
+
+// 提交练习题答案
+async function submitExercise() {
+    if (!currentExercise) return;
+    
+    let answers = [];
+    
+    if (currentExercise.type === 'choice') {
+        const selected = document.querySelector('input[name="exercise_answer"]:checked');
+        if (!selected) {
+            showNotification('请选择答案', 'warning');
+            return;
+        }
+        answers = [selected.value];
+    } else if (currentExercise.type === 'fill_blank') {
+        const inputs = document.querySelectorAll('.blank-input');
+        inputs.forEach(input => {
+            answers.push(input.value.trim());
+        });
+    } else {
+        const answer = document.getElementById('exerciseAnswer').value.trim();
+        if (!answer) {
+            showNotification('请输入答案', 'warning');
+            return;
+        }
+        answers = [answer];
+    }
+    
+    // 客观题直接验证
+    if (['choice', 'fill_blank', 'match', 'multi_fill'].includes(currentExercise.type)) {
+        const correct = JSON.stringify(answers) === JSON.stringify(currentExercise.correct_answers);
+        showExerciseResult(correct, currentExercise.explanation);
+    } else {
+        // 主观题需要AI批改
+        showNotification('主观题需要AI批改，功能开发中...', 'info');
+    }
+}
+
+// 显示练习结果
+function showExerciseResult(correct, explanation) {
+    const result = document.getElementById('exerciseResult');
+    result.innerHTML = `
+        <div class="result-status ${correct ? 'correct' : 'incorrect'}">
+            <span class="result-icon">${correct ? '✓' : '✗'}</span>
+            <span class="result-text">${correct ? '回答正确！' : '回答错误'}</span>
+        </div>
+        <div class="result-explanation">
+            <strong>解析：</strong>
+            <p>${formatMessage(explanation)}</p>
+        </div>
+    `;
+    result.style.display = 'block';
+}
+
+function hideExercise() {
+    document.getElementById('exerciseModal').classList.remove('active');
+    currentExercise = null;
+}
+
+// 加载文件树
+async function loadFileTree() {
+    try {
+        const response = await fetch(`/api/workspaces/${workspaceId}/files`);
+        const data = await response.json();
+        
+        if (data.success) {
+            renderFileTree(data.files);
+        }
+    } catch (error) {
+        console.error('加载文件树失败:', error);
+    }
+}
+
+// 渲染文件树
+function renderFileTree(files) {
+    const container = document.getElementById('fileTree');
+    
+    if (files.length === 0) {
+        container.innerHTML = '<div class="file-tree-empty">暂无文件</div>';
+        return;
+    }
+    
+    const grouped = groupFilesByDir(files);
+    container.innerHTML = renderFileGroup(grouped, 0);
+}
+
+function groupFilesByDir(files) {
+    const root = { name: '', children: {}, files: [] };
+    
+    files.forEach(file => {
+        const parts = file.path.split('/');
+        let current = root;
+        
+        for (let i = 0; i < parts.length - 1; i++) {
+            const part = parts[i];
+            if (!current.children[part]) {
+                current.children[part] = { name: part, children: {}, files: [] };
+            }
+            current = current.children[part];
+        }
+        
+        current.files.push(file);
+    });
+    
+    return root;
+}
+
+function renderFileGroup(group, level) {
+    let html = '';
+    
+    // 渲染子目录
+    for (const [name, child] of Object.entries(group.children)) {
+        html += `
+            <div class="file-tree-folder" style="padding-left: ${level * 12}px">
+                <div class="file-tree-folder-header">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <span>${escapeHtml(name)}</span>
+                </div>
+                <div class="file-tree-folder-content">
+                    ${renderFileGroup(child, level + 1)}
+                </div>
+            </div>
+        `;
+    }
+    
+    // 渲染文件
+    for (const file of group.files) {
+        const fileName = file.name;
+        html += `
+            <div class="file-tree-item" style="padding-left: ${level * 12 + 20}px" 
+                 onclick="previewFile('${file.path}')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                </svg>
+                <span>${escapeHtml(fileName)}</span>
+            </div>
+        `;
+    }
+    
+    return html;
+}
+
+// 预览文件
+async function previewFile(filePath) {
+    try {
+        const response = await fetch(`/api/workspaces/${workspaceId}/files/${encodeURIComponent(filePath)}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('filePreviewTitle').textContent = filePath;
+            document.getElementById('filePreviewContent').textContent = data.content;
+            document.getElementById('filePreviewModal').classList.add('active');
+        } else {
+            showNotification(data.error || '加载失败', 'error');
+        }
+    } catch (error) {
+        showNotification('网络错误', 'error');
+        console.error(error);
+    }
+}
+
+function hideFilePreview() {
+    document.getElementById('filePreviewModal').classList.remove('active');
+}
+
+// 显示学习计划
+async function showStudyPlan() {
+    try {
+        const response = await fetch(`/api/workspaces/${workspaceId}/files/study_plan.md`);
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('studyPlanContent').innerHTML = formatMessage(data.content);
+            document.getElementById('studyPlanModal').classList.add('active');
+        } else {
+            showNotification('学习计划尚未生成', 'warning');
+        }
+    } catch (error) {
+        showNotification('加载失败', 'error');
+        console.error(error);
+    }
+}
+
+function hideStudyPlan() {
+    document.getElementById('studyPlanModal').classList.remove('active');
+}
+
+// 消息处理
+function appendMessage(role, content, isStreaming = false) {
+    const container = document.getElementById('messagesContainer');
+    const welcomeMsg = document.getElementById('welcomeMessage');
+    
+    if (welcomeMsg) {
+        welcomeMsg.style.display = 'none';
+    }
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message message-${role}`;
+    
+    const avatar = role === 'user' ? '👤' : '🤖';
+    const name = role === 'user' ? '你' : 'AI助手';
+    
+    messageDiv.innerHTML = `
+        <div class="message-avatar">${avatar}</div>
+        <div class="message-content-wrapper">
+            <div class="message-header">
+                <span class="message-name">${name}</span>
+                <span class="message-time">${new Date().toLocaleTimeString()}</span>
+            </div>
+            <div class="message-content">${isStreaming ? '' : formatMessage(content)}</div>
+            ${role === 'assistant' && !isStreaming ? `
+                <div class="message-actions">
+                    <button class="message-action-btn" onclick="copyMessage(this)" title="复制">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                        </svg>
+                    </button>
+                </div>
+            ` : ''}
+        </div>
+    `;
+    
+    container.appendChild(messageDiv);
+    scrollToBottom();
+    
+    if (isStreaming) {
+        return messageDiv.querySelector('.message-content');
+    }
+    
+    return messageDiv;
+}
+
+// 格式化消息（Markdown支持）
+function formatMessage(content) {
+    if (!content) return '';
+    
+    // 转义HTML
+    let html = escapeHtml(content);
+    
+    // 代码块
+    html = html.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
+        return `<div class="code-block">
+            <div class="code-header">
+                <span class="code-lang">${lang || 'text'}</span>
+                <button class="code-copy-btn" onclick="copyCode(this)">复制</button>
+            </div>
+            <pre><code>${escapeHtml(code.trim())}</code></pre>
+        </div>`;
+    });
+    
+    // 行内代码
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+    
+    // 粗体
+    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    
+    // 斜体
+    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    
+    // 标题
+    html = html.replace(/^### (.+)$/gm, '<h4>$1</h4>');
+    html = html.replace(/^## (.+)$/gm, '<h3>$1</h3>');
+    html = html.replace(/^# (.+)$/gm, '<h2>$1</h2>');
+    
+    // 列表
+    html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+    html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>');
+    
+    // 换行
+    html = html.replace(/\n/g, '<br>');
+    
+    // 隐藏工具调用标签
+    html = html.replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '');
+    
+    return html;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// 复制功能
+function copyMessage(btn) {
+    const content = btn.closest('.message-content-wrapper').querySelector('.message-content').innerText;
+    navigator.clipboard.writeText(content).then(() => {
+        showNotification('已复制到剪贴板', 'success');
+    });
+}
+
+function copyCode(btn) {
+    const code = btn.closest('.code-block').querySelector('code').innerText;
+    navigator.clipboard.writeText(code).then(() => {
+        btn.textContent = '已复制';
+        setTimeout(() => btn.textContent = '复制', 2000);
+    });
+}
+
+// 输入处理
+function handleKeyPress(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault();
+        sendMessage();
+    }
+}
+
+function autoResize(textarea) {
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+}
+
+function scrollToBottom() {
+    const container = document.getElementById('messagesContainer');
+    container.scrollTop = container.scrollHeight;
+}
+
+// 侧边栏切换
+const sidebarToggle = document.getElementById('sidebarToggle');
+const sidebarToggleMobile = document.getElementById('sidebarToggleMobile');
+const sidebar = document.getElementById('sidebar');
+
+if (sidebarToggle) {
+    sidebarToggle.addEventListener('click', () => {
+        sidebar.classList.toggle('collapsed');
+    });
+}
+
+if (sidebarToggleMobile) {
+    sidebarToggleMobile.addEventListener('click', () => {
+        sidebar.classList.toggle('mobile-open');
+    });
+}
+
+// 加载动画
+function showLoading(show) {
+    const overlay = document.getElementById('loading-overlay');
+    if (show) {
+        overlay.classList.remove('hidden');
+    } else {
+        overlay.classList.add('hidden');
+    }
+}
+
+// 清空对话
+function clearChat() {
+    if (confirm('确定要清空当前对话吗？')) {
+        document.getElementById('messagesContainer').innerHTML = `
+            <div class="welcome-message" id="welcomeMessage">
+                <div class="welcome-icon">👋</div>
+                <h3>对话已清空</h3>
+                <p>开始新的对话吧！</p>
+            </div>
+        `;
+    }
+}
+
+// 导出对话
+function exportChat() {
+    const messages = [];
+    document.querySelectorAll('.message').forEach(msg => {
+        const role = msg.classList.contains('message-user') ? 'user' : 'assistant';
+        const content = msg.querySelector('.message-content').innerText;
+        messages.push({ role, content });
+    });
+    
+    const blob = new Blob([JSON.stringify(messages, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `chat-${workspaceId}-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    showNotification('对话已导出', 'success');
+}
+
+// 通知系统
+function showNotification(message, type = 'info') {
+    const container = document.getElementById('notification-container');
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.innerHTML = `
+        <span class="notification-message">${message}</span>
+        <button class="notification-close" onclick="this.parentElement.remove()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+    `;
+    container.appendChild(notification);
+
+    setTimeout(() => notification.classList.add('show'), 10);
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+</script>
+{% endblock %}

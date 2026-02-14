@@ -1,0 +1,312 @@
+{% extends "base.html" %}
+
+{% block title %}AI Learning Assistant - 首页{% endblock %}
+
+{% block content %}
+<div class="home-container">
+    <!-- 欢迎区域 -->
+    <section class="hero-section">
+        <div class="hero-content">
+            <h1 class="hero-title">
+                <span class="gradient-text">AI 协作学习</span>
+                <br>你的个人智能导师
+            </h1>
+            <p class="hero-subtitle">
+                基于结构化上下文管理的长程教学助手，
+                <br>让每一次学习都连贯、高效、个性化
+            </p>
+            <div class="hero-actions">
+                <button class="btn btn-primary btn-lg" onclick="showNewLearningModal()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                    开始学习
+                </button>
+                <button class="btn btn-secondary btn-lg" onclick="loadWorkspaces()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    继续学习
+                </button>
+            </div>
+        </div>
+        <div class="hero-visual">
+            <div class="floating-cards">
+                <div class="float-card card-1">
+                    <div class="card-icon">📚</div>
+                    <div class="card-text">个性化学习计划</div>
+                </div>
+                <div class="float-card card-2">
+                    <div class="card-icon">🤖</div>
+                    <div class="card-text">AI 智能辅导</div>
+                </div>
+                <div class="float-card card-3">
+                    <div class="card-icon">📝</div>
+                    <div class="card-text">实时练习反馈</div>
+                </div>
+                <div class="float-card card-4">
+                    <div class="card-icon">🔍</div>
+                    <div class="card-text">联网知识检索</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 功能特性 -->
+    <section class="features-section">
+        <h2 class="section-title">核心特性</h2>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                    </svg>
+                </div>
+                <h3>上下文感知</h3>
+                <p>智能上下文压缩与分层管理，确保长程教学中知识连贯不丢失</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                    </svg>
+                </div>
+                <h3>结构化学习</h3>
+                <p>AI自动生成学习计划，循序渐进掌握知识点，随时保存进度</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                </div>
+                <h3>实时搜索</h3>
+                <p>集成多种搜索引擎，获取最新知识，拓展学习边界</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                    </svg>
+                </div>
+                <h3>智能练习</h3>
+                <p>多种题型自动生成，客观题即时反馈，主观题AI批改</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- 工作区列表 -->
+    <section class="workspaces-section" id="workspacesSection" style="display: none;">
+        <div class="section-header">
+            <h2 class="section-title">学习进度</h2>
+            <button class="btn btn-ghost btn-sm" onclick="hideWorkspaces()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+                关闭
+            </button>
+        </div>
+        <div class="workspaces-list" id="workspacesList">
+            <!-- 动态加载 -->
+        </div>
+    </section>
+</div>
+
+<!-- 新建学习模态框 -->
+<div class="modal" id="newLearningModal">
+    <div class="modal-overlay" onclick="hideNewLearningModal()"></div>
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>开始新的学习</h3>
+            <button class="modal-close" onclick="hideNewLearningModal()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label for="learningTheme">你想学习什么？</label>
+                <input type="text" id="learningTheme" class="form-input" 
+                       placeholder="例如：Python编程、机器学习基础、世界历史..."
+                       onkeypress="if(event.key==='Enter')startNewLearning()">
+                <p class="form-hint">输入一个主题，AI将为你制定个性化学习计划</p>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="hideNewLearningModal()">取消</button>
+            <button class="btn btn-primary" onclick="startNewLearning()">
+                <span class="btn-text">开始</span>
+                <span class="btn-loading hidden">
+                    <span class="spinner"></span>
+                </span>
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 主题切换
+const themeToggle = document.getElementById('themeToggle');
+const html = document.documentElement;
+
+// 加载保存的主题
+const savedTheme = localStorage.getItem('theme') || 'light';
+html.setAttribute('data-theme', savedTheme);
+
+themeToggle.addEventListener('click', () => {
+    const currentTheme = html.getAttribute('data-theme');
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    html.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+});
+
+// 显示/隐藏模态框
+function showNewLearningModal() {
+    document.getElementById('newLearningModal').classList.add('active');
+    document.getElementById('learningTheme').focus();
+}
+
+function hideNewLearningModal() {
+    document.getElementById('newLearningModal').classList.remove('active');
+    document.getElementById('learningTheme').value = '';
+}
+
+// 开始新学习
+async function startNewLearning() {
+    const theme = document.getElementById('learningTheme').value.trim();
+    if (!theme) {
+        showNotification('请输入学习主题', 'warning');
+        return;
+    }
+
+    const btn = document.querySelector('#newLearningModal .btn-primary');
+    const btnText = btn.querySelector('.btn-text');
+    const btnLoading = btn.querySelector('.btn-loading');
+
+    btn.disabled = true;
+    btnText.classList.add('hidden');
+    btnLoading.classList.remove('hidden');
+
+    try {
+        const response = await fetch('/api/workspaces', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ theme })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showNotification('学习空间创建成功', 'success');
+            // 跳转到询问阶段
+            window.location.href = `/chat/${data.workspace.id}?phase=inquiry`;
+        } else {
+            showNotification(data.error || '创建失败', 'error');
+        }
+    } catch (error) {
+        showNotification('网络错误，请重试', 'error');
+        console.error(error);
+    } finally {
+        btn.disabled = false;
+        btnText.classList.remove('hidden');
+        btnLoading.classList.add('hidden');
+    }
+}
+
+// 加载工作区列表
+async function loadWorkspaces() {
+    const section = document.getElementById('workspacesSection');
+    const list = document.getElementById('workspacesList');
+
+    try {
+        const response = await fetch('/api/workspaces');
+        const data = await response.json();
+
+        if (data.success && data.workspaces.length > 0) {
+            list.innerHTML = data.workspaces.map(ws => `
+                <div class="workspace-card" onclick="continueLearning('${ws.id}')">
+                    <div class="workspace-info">
+                        <h4>${escapeHtml(ws.theme)}</h4>
+                        <p class="workspace-meta">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                                <line x1="16" y1="2" x2="16" y2="6"/>
+                                <line x1="8" y1="2" x2="8" y2="6"/>
+                                <line x1="3" y1="10" x2="21" y2="10"/>
+                            </svg>
+                            ${formatDate(ws.created_at)}
+                        </p>
+                    </div>
+                    <div class="workspace-arrow">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 18l6-6-6-6"/>
+                        </svg>
+                    </div>
+                </div>
+            `).join('');
+            section.style.display = 'block';
+            section.scrollIntoView({ behavior: 'smooth' });
+        } else {
+            showNotification('暂无学习进度，开始新的学习吧！', 'info');
+        }
+    } catch (error) {
+        showNotification('加载失败，请重试', 'error');
+        console.error(error);
+    }
+}
+
+function hideWorkspaces() {
+    document.getElementById('workspacesSection').style.display = 'none';
+}
+
+function continueLearning(workspaceId) {
+    window.location.href = `/chat/${workspaceId}`;
+}
+
+// 工具函数
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function formatDate(dateStr) {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('zh-CN', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+// 通知系统
+function showNotification(message, type = 'info') {
+    const container = document.getElementById('notification-container');
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.innerHTML = `
+        <span class="notification-message">${message}</span>
+        <button class="notification-close" onclick="this.parentElement.remove()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+    `;
+    container.appendChild(notification);
+
+    setTimeout(() => {
+        notification.classList.add('show');
+    }, 10);
+
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 300);
+    }, 3000);
+}
+</script>
+{% endblock %}

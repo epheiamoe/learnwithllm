@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Learning Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 3rem;
+            max-width: 600px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+        
+        .logo {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+        
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: #1a202c;
+        }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        p {
+            color: #4a5568;
+            line-height: 1.6;
+            margin-bottom: 2rem;
+        }
+        
+        .steps {
+            text-align: left;
+            background: #f7fafc;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .step {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .step:last-child {
+            margin-bottom: 0;
+        }
+        
+        .step-number {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.875rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        
+        .step-content {
+            flex: 1;
+        }
+        
+        .step-title {
+            font-weight: 600;
+            color: #1a202c;
+            margin-bottom: 0.25rem;
+        }
+        
+        .step-desc {
+            font-size: 0.875rem;
+            color: #718096;
+        }
+        
+        code {
+            background: #edf2f7;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.875rem;
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.875rem 1.5rem;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        .features {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+        
+        .feature {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: #4a5568;
+        }
+        
+        .feature-icon {
+            font-size: 1.25rem;
+        }
+        
+        @media (max-width: 480px) {
+            .container {
+                padding: 2rem;
+            }
+            
+            h1 {
+                font-size: 1.5rem;
+            }
+            
+            .features {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">🎓</div>
+        <h1><span class="gradient-text">AI Learning</span> Assistant</h1>
+        <p>基于结构化上下文管理的个人智能导师，让每一次学习都连贯、高效、个性化。</p>
+        
+        <div class="steps">
+            <div class="step">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <div class="step-title">安装依赖</div>
+                    <div class="step-desc">运行 <code>pip install -r requirements.txt</code></div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <div class="step-title">配置</div>
+                    <div class="step-desc">运行 <code>python setup.py</code> 配置LLM和搜索</div>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <div class="step-title">启动应用</div>
+                    <div class="step-desc">运行 <code>python app.py</code> 并访问 http://localhost:5000</div>
+                </div>
+            </div>
+        </div>
+        
+        <a href="https://github.com/yourusername/ai-learning-assistant" class="btn" target="_blank">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+            </svg>
+            查看文档
+        </a>
+        
+        <div class="features">
+            <div class="feature">
+                <span class="feature-icon">🧠</span>
+                <span>上下文感知</span>
+            </div>
+            <div class="feature">
+                <span class="feature-icon">📚</span>
+                <span>结构化学习</span>
+            </div>
+            <div class="feature">
+                <span class="feature-icon">🔍</span>
+                <span>实时搜索</span>
+            </div>
+            <div class="feature">
+                <span class="feature-icon">✅</span>
+                <span>智能练习</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
