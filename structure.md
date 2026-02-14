@@ -33,6 +33,7 @@ ai-learning-assistant/
         ├── study_plan.md       # AI生成的学习计划
         ├── agents.md           # 学习进度记录
         ├── history.json        # 对话历史
+        ├── workspace_state.json # 工作区状态（阶段、token计数等）
         ├── notes/              # 笔记目录
         └── exercises/          # 练习题目录
 ```
@@ -123,8 +124,13 @@ ai-learning-assistant/
 
 ### 工作区持久化
 - 所有数据保存在workspaces/目录下
-- 每个工作区独立目录，包含study_plan.md、agents.md、history.json
-- 可随时关闭浏览器，从agents.md状态恢复
+- 每个工作区独立目录，包含：
+  - `study_plan.md`: AI生成的学习计划
+  - `agents.md`: 学习进度记录
+  - `history.json`: 对话历史
+  - `workspace_state.json`: 工作区状态（阶段、token计数、压缩上下文等）
+- 可随时关闭浏览器，从保存的状态恢复
+- 阶段信息（inquiry/teaching）在`workspace_state.json`中持久化
 
 ## 配置说明
 

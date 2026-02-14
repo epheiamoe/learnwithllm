@@ -153,11 +153,27 @@ python setup.py
 
 ## 常见问题修复
 
+### 问题：AI在需求询问阶段就开始教学
+**修复版本**: v1.1.0
+**问题描述**: AI在需求询问阶段就开始提供教学内容和工具调用
+**解决方案**:
+1. 强化`PHASE1_INQUIRY_PROMPT`提示词，明确禁止教学和工具使用
+2. 添加明确的阶段结束信号："I have enough information now. Please click the 'Generate Study Plan' button..."
+3. 前端添加"生成学习计划"按钮，只在询问阶段显示
+4. 实现工作区状态持久化（`workspace_state.json`）
+
+**检查点**:
+1. 确认`PHASE1_INQUIRY_PROMPT`包含明确的禁止规则
+2. 确认`inquiry_chat`路由不传递工具参数
+3. 确认`workspace_state.json`正确保存和加载阶段信息
+4. 确认前端"生成学习计划"按钮只在`currentPhase === 'inquiry'`时显示
+
 ### 问题：无法正常进入正式教学
 **检查点**:
 1. `generateStudyPlan`是否成功执行
 2. `study_plan.md`是否成功写入
 3. 工作区`current_phase`是否更新为"teaching"
+4. `workspace_state.json`是否包含正确的阶段信息
 
 ### 问题：工具调用不生效
 **检查点**:
