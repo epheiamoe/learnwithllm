@@ -43,6 +43,7 @@ python setup.py
 ```
 
 按照向导提示配置：
+
 - LLM提供商（OpenAI、Google、Kimi、xAI、DeepSeek、OpenRouter等）
 - API密钥
 - 默认模型
@@ -79,27 +80,30 @@ workspace_root: "./workspaces"
 
 ### 支持的LLM提供商
 
-| 提供商 | base_url | 推荐模型 |
-|--------|----------|----------|
-| OpenAI | https://api.openai.com/v1 | gpt-4o, gpt-4o-mini |
-| Google (Gemini) | https://generativelanguage.googleapis.com/v1beta/openai | gemini-2.0-flash |
-| Kimi (Moonshot) | https://api.moonshot.cn/v1 | kimi-k2 |
-| xAI (Grok) | https://api.x.ai/v1 | grok-2 |
-| DeepSeek | https://api.deepseek.com/v1 | deepseek-chat |
-| OpenRouter | https://openrouter.ai/api/v1 | openai/gpt-4o |
+| 提供商             | base_url                                                | 推荐模型                |
+| --------------- | ------------------------------------------------------- | ------------------- |
+| OpenAI          | https://api.openai.com/v1                               | gpt-4o, gpt-4o-mini |
+| Google (Gemini) | https://generativelanguage.googleapis.com/v1beta/openai | gemini-2.0-flash    |
+| Kimi (Moonshot) | https://api.moonshot.cn/v1                              | kimi-k2             |
+| xAI (Grok)      | https://api.x.ai/v1                                     | grok-2              |
+| DeepSeek        | https://api.deepseek.com/v1                             | deepseek-chat       |
+| OpenRouter      | https://openrouter.ai/api/v1                            | openai/gpt-4o       |
 
 ### 搜索引擎配置
 
 #### Tavily (推荐)
+
 1. 访问 https://tavily.com 注册账号
 2. 获取 API Key
 3. 在 setup.py 中选择 Tavily 并输入 API Key
 
 #### Jina AI
+
 1. 访问 https://jina.ai 获取 API Key
 2. 在 setup.py 中选择 Jina
 
 #### Brave Search
+
 1. 访问 https://brave.com/search/api/ 注册
 2. 获取 API Key
 3. 在 setup.py 中选择 Brave
@@ -197,15 +201,19 @@ FLASK_DEBUG=1 python app.py
 ## 常见问题
 
 ### Q: 如何更换LLM模型？
+
 A: 运行 `python setup.py`，选择"修改LLM配置"即可。
 
 ### Q: 搜索功能无法使用？
+
 A: 确保已在配置中设置搜索API Key。如不需要搜索，可在配置中跳过。
 
 ### Q: 上下文压缩是什么意思？
+
 A: 当对话token数接近模型限制时，系统会自动总结早期对话内容，保留关键信息，确保教学连贯性。
 
 ### Q: 如何导出学习记录？
+
 A: 在聊天页面点击顶部"导出对话"按钮。
 
 ## 技术栈
@@ -227,45 +235,6 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 
 详细变更记录请查看 [CHANGELOG.md](CHANGELOG.md)。
 
-### v3.3.0 (2026-02-15) - 工具调用优化版
-- **修复工具调用参数问题**：增强`file_system`工具参数验证，提供详细错误提示
-- **优化教学流程自动化**：确保AI调用`end_inquiry`后自动进入教学阶段，无需手动点击
-- **新增工具调用可视化**：在聊天区域显示工具调用状态和结果，增强用户体验
-- **改进错误处理机制**：工具执行失败时返回结构化错误信息，帮助AI重新正确调用
-- **增强调试支持**：添加关键流程调试日志，便于问题诊断
+### 最新版本
 
-### v3.2.0 (2026-02-15) - 问题修复与优化版
-- **修复练习题生成**：优化工具提示词，确保AI提供完整的题目内容
-- **增强参数验证**：`generate_exercise`工具现在会验证必要参数，防止生成空题目
-- **修复教学流程**：改进`end_inquiry`工具的错误处理，确保流程顺畅
-- **优化滚动体验**：AI输出时不再频繁自动滚动，允许用户阅读时保持位置
-- **改进工具调用**：添加详细的工具调用示例和错误提示
-
-### v3.0.0 (2026-02-15) - 用户体验优化版
-- **自动化流程**：AI收集足够信息后自动生成学习计划，无需手动点击
-- **智能教学策略**：优化提示词确保AI主动引导，每次教学要么提问要么出题
-- **界面现代化**：移除头像，采用卡片式消息设计，视觉更简洁清晰
-- **完整导出功能**：支持标准JSON格式对话记录导出，包含元数据和文件结构
-- **教学流程优化**：AI生成第一句话开始教学，移除预设欢迎信息
-- **工具调用标准化**：确保出题工具符合OpenAI标准tool参数格式
-- **响应式改进**：优化移动端消息卡片显示
-
-### v2.0.0 (2026-02-15)
-- **新增**：AI主动结束询问功能，添加`end_inquiry`工具
-- **优化**：提示词分离到独立配置文件`prompts.yml`，便于维护
-- **改进**：学习计划自适应生成，避免小题大做
-- **增强**：前端按钮动画效果，更好的用户体验
-- **重构**：引入`PromptManager`类统一管理提示词
-
-### v1.1.0 (2026-02-15)
-- **修复**：AI在需求询问阶段就开始教学的问题
-- **新增**：工作区状态持久化（`workspace_state.json`）
-- **改进**：前端"生成学习计划"按钮和阶段指示器
-- **优化**：阶段切换逻辑和用户体验
-
-### v1.0.0 (2026-02-14)
-- 初始版本发布
-- 支持多LLM提供商
-- 上下文压缩机制
-- 工具调用系统
-- 响应式UI设计
+[1.5.0] - 2026-02-15

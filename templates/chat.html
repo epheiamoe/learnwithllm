@@ -607,8 +607,13 @@ async function sendInquiryMessage(message) {
                         if (data.done) {
                             console.log('收到done信号，inquiryComplete:', inquiryComplete, 'fullResponse长度:', fullResponse.length);
 
-                            // 只有当有实际内容时才添加到历史
-                            if (fullResponse.trim()) {
+                            // 检查是否为空消息
+                            if (!fullResponse.trim()) {
+                                // 如果是空消息，移除消息容器
+                                responseDiv.remove();
+                                console.log('检测到空消息，已移除消息容器');
+                            } else {
+                                // 只有当有实际内容时才添加到历史
                                 inquiryHistory.push({ role: 'assistant', content: fullResponse });
                             }
 

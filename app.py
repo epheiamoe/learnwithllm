@@ -347,7 +347,19 @@ class ToolExecutor:
         """生成练习题"""
         # 检查必要参数
         if not params.get('question'):
-            return {'error': '题目内容不能为空', 'hint': '请提供完整的题目内容，包括question、type等参数'}
+            return {
+                'error': '题目内容不能为空',
+                'hint': '请提供完整的题目内容，包括question、type等参数',
+                'required_params': ['question', 'type'],
+                'example': {
+                    'type': 'choice',
+                    'question': '中世纪欧洲封建制度的核心是什么？',
+                    'options': ['君主专制', '封建契约关系', '城邦民主', '部落联盟'],
+                    'correct_answers': ['封建契约关系'],
+                    'explanation': '中世纪欧洲封建制度的核心是封建契约关系...',
+                    'difficulty': 'medium'
+                }
+            }
 
         exercise_type = params.get('type', 'choice')
 
@@ -355,16 +367,36 @@ class ToolExecutor:
         if exercise_type == 'choice':
             options = params.get('options', [])
             if len(options) < 2:
-                return {'error': '选择题必须提供至少2个选项', 'hint': '请提供完整的选项数组'}
+                return {
+                    'error': '选择题必须提供至少2个选项',
+                    'hint': '请提供完整的选项数组',
+                    'current_params': params,
+                    'missing': '至少2个选项'
+                }
             if not params.get('correct_answers'):
-                return {'error': '选择题必须提供正确答案', 'hint': '请提供correct_answers参数'}
+                return {
+                    'error': '选择题必须提供正确答案',
+                    'hint': '请提供correct_answers参数',
+                    'current_params': params,
+                    'missing': 'correct_answers'
+                }
 
         elif exercise_type == 'fill_blank':
             blanks = params.get('blanks', [])
             if not blanks:
-                return {'error': '填空题必须提供空白位置', 'hint': '请提供blanks参数'}
+                return {
+                    'error': '填空题必须提供空白位置',
+                    'hint': '请提供blanks参数',
+                    'current_params': params,
+                    'missing': 'blanks'
+                }
             if not params.get('correct_answers'):
-                return {'error': '填空题必须提供正确答案', 'hint': '请提供correct_answers参数'}
+                return {
+                    'error': '填空题必须提供正确答案',
+                    'hint': '请提供correct_answers参数',
+                    'current_params': params,
+                    'missing': 'correct_answers'
+                }
 
         exercise = {
             'type': exercise_type,
@@ -1018,14 +1050,19 @@ def inquiry_chat(workspace_id):
 
                         result = tool_executor.execute('end_inquiry', params_dict, workspace)
                         if result.get('inquiry_complete'):
+                            # 发送工具调用完成状态
+                            yield f"data: {json.dumps({'tool_call': {'name': 'end_inquiry', 'status': 'completed', 'result': result}})}\n\n"
+                            # 发送询问完成信号
                             yield f"data: {json.dumps({'inquiry_complete': True, 'summary': result.get('summary', '')})}\n\n"
                     except json.JSONDecodeError as e:
                         logger.error(f"解析end_inquiry参数失败: {str(e)}, params: {params_str}")
                         # 即使解析失败，也标记询问完成
+                        yield f"data: {json.dumps({'tool_call': {'name': 'end_inquiry', 'status': 'completed', 'result': {'inquiry_complete': True, 'summary': 'AI已收集足够信息'}}})}\n\n"
                         yield f"data: {json.dumps({'inquiry_complete': True, 'summary': 'AI已收集足够信息'})}\n\n"
                     except Exception as e:
                         logger.error(f"执行end_inquiry工具失败: {str(e)}")
                         # 即使执行失败，也标记询问完成
+                        yield f"data: {json.dumps({'tool_call': {'name': 'end_inquiry', 'status': 'completed', 'result': {'inquiry_complete': True, 'summary': 'AI已收集足够信息'}}})}\n\n"
                         yield f"data: {json.dumps({'inquiry_complete': True, 'summary': 'AI已收集足够信息'})}\n\n"
 
         yield f"data: {json.dumps({'done': True, 'full_response': full_response})}\n\n"
