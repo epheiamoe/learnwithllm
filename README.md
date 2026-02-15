@@ -1,9 +1,19 @@
 # AI Learning Assistant
 
+> ⚠️ **免责声明**: 本项目全程使用AI辅助开发，可能存在不稳定因素，仅供学习参考。
+
 AI协作学习助手 - 基于结构化上下文管理的个人智能导师
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+
+## 介绍
+
+您好！这是我全程用AI开发的小工具，所以可能有很多问题。如果您追求稳定使用，请不要使用它。但无论如何，希望它帮助到您。
+
+当然，正因如此，也欢迎您通过AI agent 修改并提交PR，本项目不会禁止AI 提交的PR。谢谢您。
+
+项目地址：[链接](https://github.com/epheiamoe/learnwithllm)
 
 ## 功能特性
 
@@ -237,4 +247,4 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 
 ### 最新版本
 
-[1.5.0] - 2026-02-15
+[1.5.4] - 2026-02-15
