@@ -505,7 +505,18 @@ async function sendMessage(message = null, autoStart = false) {
     if (isGenerating) return;
 
     const input = document.getElementById('messageInput');
-    const userMessage = message !== null ? message : input.value.trim();
+    let userMessage = message !== null ? message : input.value.trim();
+
+    // 在教学阶段，允许空消息作为"继续"的确认
+    if (currentPhase === 'teaching' && !userMessage && !autoStart) {
+        // 如果有练习反馈，使用它作为消息内容
+        if (window.exerciseFeedback) {
+            userMessage = window.exerciseFeedback;
+            window.exerciseFeedback = null; // 使用后清空
+        } else {
+            userMessage = "请继续"; // 默认的继续消息
+        }
+    }
 
     if (!userMessage && !autoStart) return;
 
@@ -787,14 +798,21 @@ async function sendTeachingMessage(message) {
                         if (data.done) {
                             tokenCount = data.token_count || tokenCount;
                             updateContextIndicator();
+                            
+                            // AI回复完成后，如果有待显示的题目，则显示
+                            if (window.pendingExercise) {
+                                setTimeout(() => {
+                                    showExercise(window.pendingExercise);
+                                    window.pendingExercise = null;
+                                }, 300);
+                            }
                         }
 
-                        // 处理练习题数据
+                        // 处理练习题数据 - 延迟到AI回复完成后显示
                         if (data.exercise && !hasExercise) {
                             hasExercise = true;
-                            setTimeout(() => {
-                                showExercise(data.exercise);
-                            }, 500);
+                            // 保存练习题数据，在done时显示
+                            window.pendingExercise = data.exercise;
                         }
                     } catch (e) {
                         console.error('解析错误:', e);
@@ -960,6 +978,7 @@ async function submitExercise() {
     if (!currentExercise) return;
     
     let answers = [];
+    let answerText = '';
     
     if (currentExercise.type === 'choice') {
         const selected = document.querySelector('input[name="exercise_answer"]:checked');
@@ -968,11 +987,14 @@ async function submitExercise() {
             return;
         }
         answers = [selected.value];
+        const selectedIndex = parseInt(selected.value);
+        answerText = currentExercise.options[selectedIndex];
     } else if (currentExercise.type === 'fill_blank') {
         const inputs = document.querySelectorAll('.blank-input');
         inputs.forEach(input => {
             answers.push(input.value.trim());
         });
+        answerText = answers.join(', ');
     } else {
         const answer = document.getElementById('exerciseAnswer').value.trim();
         if (!answer) {
@@ -980,6 +1002,7 @@ async function submitExercise() {
             return;
         }
         answers = [answer];
+        answerText = answer;
     }
     
     // 客观题直接验证
@@ -997,6 +1020,20 @@ async function submitExercise() {
         }
         
         showExerciseResult(isCorrect, currentExercise.explanation);
+        
+        // 将题目和回答情况注入上下文
+        const exerciseContext = `\n\n[练习反馈]\n题目：${currentExercise.question}\n我的答案：${answerText}\n正确答案：${currentExercise.correct_answers.join(', ')}\n回答结果：${isCorrect ? '正确' : '错误'}\n`;
+        
+        // 保存到全局变量，下次发送消息时附加
+        window.exerciseFeedback = exerciseContext;
+        
+        // 显示提示，告诉用户可以点击发送按钮继续
+        showNotification(`回答${isCorrect ? '正确' : '错误'}！点击发送按钮继续学习`, 'success');
+        
+        // 3秒后自动关闭模态框
+        setTimeout(() => {
+            hideExercise();
+        }, 3000);
     } else {
         // 主观题需要AI批改
         showNotification('主观题需要AI批改，功能开发中...', 'info');
