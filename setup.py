@@ -29,12 +29,12 @@ DEFAULT_CONFIG = {
 }
 
 PROVIDERS = {
-    "1": {"name": "OpenAI", "base_url": "https://api.openai.com/v1", "models": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"]},
-    "2": {"name": "Google (Gemini)", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai", "models": ["gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"]},
-    "3": {"name": "Kimi (Moonshot)", "base_url": "https://api.moonshot.cn/v1", "models": ["kimi-k2", "kimi-k1.5", "moonshot-v1-8k"]},
-    "4": {"name": "xAI (Grok)", "base_url": "https://api.x.ai/v1", "models": ["grok-2", "grok-2-mini"]},
+    "1": {"name": "OpenAI", "base_url": "https://api.openai.com/v1", "models": ["gpt-4o", "gpt-5.2", "gpt-5-mini"]},
+    "2": {"name": "Google (Gemini)", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai", "models": ["gemini-3-flash-preview", "gemini-3-pro-preview", "gemini-2.5-flash"]},
+    "3": {"name": "Kimi (Moonshot)", "base_url": "https://api.moonshot.cn/v1", "models": ["kimi-k2.5", "kimi-k2"]},
+    "4": {"name": "xAI (Grok)", "base_url": "https://api.x.ai/v1", "models": ["grok-4-1", "grok-4-1-fast"]},
     "5": {"name": "DeepSeek", "base_url": "https://api.deepseek.com/v1", "models": ["deepseek-chat", "deepseek-reasoner"]},
-    "6": {"name": "OpenRouter", "base_url": "https://openrouter.ai/api/v1", "models": ["openai/gpt-4o", "anthropic/claude-3.5-sonnet", "google/gemini-pro"]},
+    "6": {"name": "OpenRouter", "base_url": "https://openrouter.ai/api/v1", "models": ["openai/gpt-4o", "anthropic/claude-3.5-sonnet", "google/gemini-3-pro"]},
     "7": {"name": "其他 (自定义)", "base_url": "", "models": []}
 }
 

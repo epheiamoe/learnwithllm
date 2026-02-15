@@ -90,14 +90,14 @@ workspace_root: "./workspaces"
 
 ### 支持的LLM提供商
 
-| 提供商             | base_url                                                | 推荐模型                |
-| --------------- | ------------------------------------------------------- | ------------------- |
-| OpenAI          | https://api.openai.com/v1                               | gpt-4o, gpt-4o-mini |
-| Google (Gemini) | https://generativelanguage.googleapis.com/v1beta/openai | gemini-2.0-flash    |
-| Kimi (Moonshot) | https://api.moonshot.cn/v1                              | kimi-k2             |
-| xAI (Grok)      | https://api.x.ai/v1                                     | grok-2              |
-| DeepSeek        | https://api.deepseek.com/v1                             | deepseek-chat       |
-| OpenRouter      | https://openrouter.ai/api/v1                            | openai/gpt-4o       |
+| 提供商             | base_url                                                | 推荐模型             |
+| --------------- | ------------------------------------------------------- | ---------------- |
+| OpenAI          | https://api.openai.com/v1                               | gpt-4o, gpt-5.2  |
+| Google (Gemini) | https://generativelanguage.googleapis.com/v1beta/openai | gemini-2.5-flash |
+| Kimi (Moonshot) | https://api.moonshot.cn/v1                              | kimi-k2.5        |
+| xAI (Grok)      | https://api.x.ai/v1                                     | grok-4.1         |
+| DeepSeek        | https://api.deepseek.com/v1                             | deepseek-chat    |
+| OpenRouter      | https://openrouter.ai/api/v1                            | openai/gpt-4o    |
 
 ### 搜索引擎配置
 
