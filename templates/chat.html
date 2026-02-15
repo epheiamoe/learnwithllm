@@ -156,6 +156,31 @@
             </div>
         </div>
     </main>
+
+    <!-- 右侧题目栏 -->
+    <aside class="exercise-sidebar" id="exerciseSidebar">
+        <div class="exercise-sidebar-header">
+            <h3 class="exercise-sidebar-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                </svg>
+                练习题
+            </h3>
+            <button class="exercise-sidebar-toggle" id="exerciseSidebarToggle" title="收起题目栏">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="exercise-list" id="exerciseList">
+            <div class="exercise-list-empty">
+                <div class="empty-icon">📝</div>
+                <p>暂无练习题</p>
+                <p class="empty-hint">AI会在教学过程中生成练习题</p>
+            </div>
+        </div>
+    </aside>
 </div>
 
 <!-- 学习计划模态框 -->
@@ -235,11 +260,13 @@ let isGenerating = false;
 let currentExercise = null;
 let tokenCount = 0;
 let tokenThreshold = 0;
+let exercises = []; // 存储练习题列表
 
 // 初始化
 document.addEventListener('DOMContentLoaded', () => {
     loadWorkspaceData();
     loadFileTree();
+    initExerciseSidebar();
 });
 
 // 加载工作区数据
@@ -309,6 +336,124 @@ function updateContextIndicator() {
         contextHint.textContent = '已压缩';
         contextHint.className = 'context-hint danger';
     }
+}
+
+// 初始化右侧题目栏
+function initExerciseSidebar() {
+    const sidebarToggle = document.getElementById('exerciseSidebarToggle');
+    const sidebar = document.getElementById('exerciseSidebar');
+
+    if (sidebarToggle && sidebar) {
+        sidebarToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('collapsed');
+            sidebarToggle.querySelector('svg').style.transform =
+                sidebar.classList.contains('collapsed') ? 'rotate(180deg)' : 'rotate(0)';
+        });
+    }
+
+    // 移动端切换按钮
+    const mobileToggle = document.createElement('button');
+    mobileToggle.className = 'sidebar-toggle-mobile exercise-toggle-mobile';
+    mobileToggle.innerHTML = `
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+        </svg>
+    `;
+    mobileToggle.title = '打开题目栏';
+    mobileToggle.onclick = () => sidebar.classList.toggle('mobile-open');
+
+    const chatTitle = document.querySelector('.chat-title');
+    if (chatTitle) {
+        chatTitle.appendChild(mobileToggle);
+    }
+}
+
+// 添加练习题到右侧栏
+function addExerciseToSidebar(exercise) {
+    // 生成唯一ID
+    exercise.id = `ex_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    exercise.createdAt = new Date().toISOString();
+
+    // 添加到列表
+    exercises.unshift(exercise);
+
+    // 更新显示
+    updateExerciseList();
+
+    return exercise.id;
+}
+
+// 更新练习题列表显示
+function updateExerciseList() {
+    const exerciseList = document.getElementById('exerciseList');
+    if (!exerciseList) return;
+
+    if (exercises.length === 0) {
+        exerciseList.innerHTML = `
+            <div class="exercise-list-empty">
+                <div class="empty-icon">📝</div>
+                <p>暂无练习题</p>
+                <p class="empty-hint">AI会在教学过程中生成练习题</p>
+            </div>
+        `;
+        return;
+    }
+
+    let html = '';
+    exercises.forEach((exercise, index) => {
+        const typeText = {
+            'choice': '选择题',
+            'fill_blank': '填空题',
+            'short_answer': '简答题',
+            'match': '匹配题',
+            'multi_fill': '多空题'
+        }[exercise.type] || '练习题';
+
+        const difficultyText = {
+            'easy': '简单',
+            'medium': '中等',
+            'hard': '困难'
+        }[exercise.difficulty] || '中等';
+
+        // 截取问题预览
+        const questionPreview = exercise.question.length > 100
+            ? exercise.question.substring(0, 100) + '...'
+            : exercise.question;
+
+        html += `
+            <div class="exercise-item" data-exercise-id="${exercise.id}">
+                <div class="exercise-item-header">
+                    <span class="exercise-item-type">${typeText}</span>
+                    <span class="exercise-item-difficulty ${exercise.difficulty}">${difficultyText}</span>
+                </div>
+                <div class="exercise-item-question">${escapeHtml(questionPreview)}</div>
+                <div class="exercise-item-actions">
+                    <button class="exercise-item-btn" onclick="viewExercise('${exercise.id}')">查看</button>
+                    <button class="exercise-item-btn primary" onclick="startExercise('${exercise.id}')">开始答题</button>
+                </div>
+            </div>
+        `;
+    });
+
+    exerciseList.innerHTML = html;
+}
+
+// 查看练习题详情
+function viewExercise(exerciseId) {
+    const exercise = exercises.find(ex => ex.id === exerciseId);
+    if (!exercise) return;
+
+    // 显示练习题模态框
+    showExercise(exercise);
+}
+
+// 开始答题
+function startExercise(exerciseId) {
+    const exercise = exercises.find(ex => ex.id === exerciseId);
+    if (!exercise) return;
+
+    currentExercise = exercise;
+    showExercise(exercise);
 }
 
 // 更新阶段指示器
@@ -581,15 +726,14 @@ async function sendTeachingMessage(message) {
                         if (data.done) {
                             tokenCount = data.token_count || tokenCount;
                             updateContextIndicator();
-                            
-                            // 检查是否包含练习题
-                            const exerciseMatch = fullResponse.match(/<tool_call>.*?"name":\s*"generate_exercise".*?<\/tool_call>/);
-                            if (exerciseMatch && !hasExercise) {
-                                hasExercise = true;
-                                setTimeout(() => {
-                                    parseAndShowExercise(exerciseMatch[0]);
-                                }, 500);
-                            }
+                        }
+
+                        // 处理练习题数据
+                        if (data.exercise && !hasExercise) {
+                            hasExercise = true;
+                            setTimeout(() => {
+                                showExercise(data.exercise);
+                            }, 500);
                         }
                     } catch (e) {
                         console.error('解析错误:', e);
@@ -629,30 +773,20 @@ function showToolStatus(text, show) {
     }
 }
 
-// 解析并显示练习题
-function parseAndShowExercise(toolCallStr) {
-    try {
-        const jsonMatch = toolCallStr.match(/<tool_call>(.*?)<\/tool_call>/s);
-        if (jsonMatch) {
-            const toolCall = JSON.parse(jsonMatch[1]);
-            const params = toolCall.parameters;
-            
-            currentExercise = params;
-            showExercise(params);
-        }
-    } catch (e) {
-        console.error('解析练习题失败:', e);
-    }
-}
 
 // 显示练习题
 function showExercise(exercise) {
+    // 如果练习题还没有ID，添加到右侧栏
+    if (!exercise.id) {
+        addExerciseToSidebar(exercise);
+    }
+
     const modal = document.getElementById('exerciseModal');
     const content = document.getElementById('exerciseContent');
     const difficulty = document.getElementById('exerciseDifficulty');
     const result = document.getElementById('exerciseResult');
-    
-    difficulty.textContent = exercise.difficulty === 'easy' ? '简单' : 
+
+    difficulty.textContent = exercise.difficulty === 'easy' ? '简单' :
                              exercise.difficulty === 'hard' ? '困难' : '中等';
     difficulty.className = `exercise-difficulty ${exercise.difficulty}`;
     result.style.display = 'none';
@@ -965,10 +1099,7 @@ function formatMessage(content) {
     
     // 换行
     html = html.replace(/\n/g, '<br>');
-    
-    // 隐藏工具调用标签
-    html = html.replace(/<tool_call>[\s\S]*?<\/tool_call>/g, '');
-    
+
     return html;
 }
 

@@ -1142,44 +1142,82 @@ def teaching_chat(workspace_id):
     def generate():
         full_response = ""
         tool_calls_buffer = []
-        
+        tool_call_id = None
+        tool_name = None
+        tool_args = {}
+
         for chunk in llm_service.chat_completion(messages, stream=True, tools=tools):
             if not chunk.startswith('data: '):
                 continue
-            
+
             data_str = chunk[6:]
             if data_str == '[DONE]':
                 break
-            
+
             try:
                 data = json.loads(data_str)
             except:
                 continue
-            
+
             if 'error' in data:
                 yield f"data: {json.dumps({'error': data['error']})}\n\n"
                 return
-            
+
             if 'choices' in data and len(data['choices']) > 0:
                 choice = data['choices'][0]
                 delta = choice.get('delta', {})
-                
+
                 # 处理工具调用
                 if 'tool_calls' in delta:
                     for tc in delta['tool_calls']:
-                        tool_calls_buffer.append(tc)
-                        if 'function' in tc and 'name' in tc['function']:
-                            yield f"data: {json.dumps({'tool_call': {'name': tc['function']['name'], 'status': 'started'}})}\n\n"
-                
+                        if 'id' in tc:
+                            tool_call_id = tc['id']
+                        if 'function' in tc:
+                            if 'name' in tc['function']:
+                                tool_name = tc['function']['name']
+                                yield f"data: {json.dumps({'tool_call': {'name': tool_name, 'status': 'started'}})}\n\n"
+                            if 'arguments' in tc['function']:
+                                try:
+                                    tool_args = json.loads(tc['function']['arguments'])
+                                except:
+                                    tool_args = {}
+
                 # 处理普通内容
                 content = delta.get('content', '')
                 if content:
                     full_response += content
                     yield f"data: {json.dumps({'content': content})}\n\n"
-        
-        # 保存消息到历史
-        workspace.messages.append({'role': 'user', 'content': user_input})
-        workspace.messages.append({'role': 'assistant', 'content': full_response})
+
+        # 执行工具调用（如果有）
+        if tool_name and tool_call_id:
+            try:
+                # 执行工具
+                tool_result = tool_executor.execute(tool_name, tool_args, workspace)
+
+                # 将工具结果添加到消息历史
+                tool_message = {
+                    'role': 'tool',
+                    'content': json.dumps(tool_result, ensure_ascii=False),
+                    'tool_call_id': tool_call_id
+                }
+                workspace.messages.append({'role': 'user', 'content': user_input})
+                workspace.messages.append({'role': 'assistant', 'content': full_response, 'tool_calls': [{'id': tool_call_id, 'function': {'name': tool_name, 'arguments': json.dumps(tool_args)}}]})
+                workspace.messages.append(tool_message)
+
+                # 发送工具执行结果给前端
+                yield f"data: {json.dumps({'tool_call': {'name': tool_name, 'status': 'completed', 'result': tool_result}})}\n\n"
+
+                # 如果工具是generate_exercise，需要特殊处理
+                if tool_name == 'generate_exercise' and 'exercise' in tool_result:
+                    yield f"data: {json.dumps({'exercise': tool_result['exercise']})}\n\n"
+
+            except Exception as e:
+                logger.error(f"工具执行失败: {str(e)}")
+                yield f"data: {json.dumps({'tool_call': {'name': tool_name, 'status': 'error', 'error': str(e)}})}\n\n"
+        else:
+            # 没有工具调用，正常保存消息
+            workspace.messages.append({'role': 'user', 'content': user_input})
+            workspace.messages.append({'role': 'assistant', 'content': full_response})
         
         # 更新token计数（估算）
         workspace.token_count = sum(len(m['content']) // 4 for m in workspace.messages)

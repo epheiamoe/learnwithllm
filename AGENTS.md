@@ -195,12 +195,28 @@ python setup.py
 1. 是否在正式教学阶段（phase === 'teaching'）
 2. tools列表是否正确传递给LLM
 3. 工具JSON Schema是否正确定义
+4. 后端是否遵循OpenAI工具调用规范（AI请求 -> 执行工具 -> 返回结果）
+5. 前端是否正确处理`data.exercise`事件
 
-### 问题：侧边栏无法展开/收起
+### 问题：AI重复询问已收集的信息
 **检查点**:
-1. CSS中`.sidebar.collapsed`样式是否正确
-2. JS事件监听器是否正确绑定
-3. 是否有其他CSS覆盖
+1. 确认`prompts.yml`中phase3_teaching提示词包含"学习计划来源"说明
+2. 确认AI清楚学习计划是自己生成的
+3. 检查教学阶段是否加载了正确的study_plan.md
+
+### 问题：练习题不显示在右侧栏
+**检查点**:
+1. 确认`showExercise`函数调用了`addExerciseToSidebar`
+2. 检查`exercises`数组是否正确更新
+3. 确认`updateExerciseList`函数正确渲染列表
+4. 检查CSS中`.exercise-sidebar`样式是否正确加载
+
+### 问题：右侧题目栏无法展开/收起
+**检查点**:
+1. CSS中`.exercise-sidebar.collapsed`样式是否正确
+2. `initExerciseSidebar`函数是否正确初始化事件监听
+3. 移动端`.exercise-sidebar.mobile-open`样式是否正确
+4. 检查是否有JavaScript错误阻止事件绑定
 
 ## 依赖版本
 
