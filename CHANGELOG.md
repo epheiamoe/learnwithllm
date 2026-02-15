@@ -5,6 +5,45 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [1.5.2] - 2026-02-15
+
+### 已修复
+
+- **工具调用参数累积错误**：修复了流式响应中工具调用参数无法正确合并的问题
+  
+  - 根本原因：OpenAI流式响应中，工具调用的参数会分多个chunk到达，但原代码只是简单append到列表，没有按index合并
+  - 修复方案：
+    - 使用字典`tool_calls_dict`按index存储工具调用
+    - 正确累积每个工具调用的id、name和arguments
+    - 支持多个工具调用同时执行
+  - 现在end_inquiry工具的参数能够正确解析，询问阶段可以正常结束
+
+- **历史消息格式错误**：修复了tool_calls被错误保存为字符串导致LLM API报错的问题
+  
+  - 问题表现：`messages[2]: invalid type: string, expected a sequence`
+  - 修复方案：
+    - 保存时保持数组格式（List[Dict]）
+    - 读取时自动将字符串转换回数组（兼容旧数据）
+  - 现在教学阶段的工具调用可以正常工作，不再报错
+
+- **阶段切换流程优化**：完善了从询问阶段到教学阶段的自动切换逻辑
+  
+  - 确保AI调用end_inquiry后正确发送inquiry_complete信号
+  - 前端正确接收并处理该信号，自动触发学习计划生成
+  - 空消息处理更加健壮，避免显示空回复
+
+### 技术细节
+
+- **流式工具调用处理重构**：
+  - `inquiry_chat`和`teaching_chat`都使用新的工具调用累积逻辑
+  - 正确处理OpenAI流式响应中的tool_calls分片
+  - 支持单个和多个工具调用
+
+- **消息格式兼容性**：
+  - 新增消息格式转换逻辑（`teaching_chat`中处理历史消息时）
+  - 向后兼容之前保存的字符串格式tool_calls
+  - 新保存的消息使用数组格式
+
 ## [1.5.1] - 2026-02-15
 
 ### 已修复
