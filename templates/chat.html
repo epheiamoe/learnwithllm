@@ -874,6 +874,10 @@ function showToolCallInChat(toolName, status, result = null) {
             }
         } else if (result.success) {
             resultHtml = `<div class="tool-success">成功: ${escapeHtml(result.message || '操作完成')}</div>`;
+            // 文件操作成功后刷新侧边栏文件树
+            if (toolName === 'file_system') {
+                setTimeout(() => loadFileTree(), 500);
+            }
         }
     }
 
@@ -980,8 +984,19 @@ async function submitExercise() {
     
     // 客观题直接验证
     if (['choice', 'fill_blank', 'match', 'multi_fill'].includes(currentExercise.type)) {
-        const correct = JSON.stringify(answers) === JSON.stringify(currentExercise.correct_answers);
-        showExerciseResult(correct, currentExercise.explanation);
+        let isCorrect = false;
+        
+        if (currentExercise.type === 'choice') {
+            // 选择题：将索引转换为对应选项文本再比较
+            const selectedIndex = parseInt(answers[0]);
+            const selectedText = currentExercise.options[selectedIndex];
+            isCorrect = currentExercise.correct_answers.includes(selectedText);
+        } else {
+            // 其他题型直接比较
+            isCorrect = JSON.stringify(answers) === JSON.stringify(currentExercise.correct_answers);
+        }
+        
+        showExerciseResult(isCorrect, currentExercise.explanation);
     } else {
         // 主观题需要AI批改
         showNotification('主观题需要AI批改，功能开发中...', 'info');

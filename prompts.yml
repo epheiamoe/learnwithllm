@@ -211,6 +211,7 @@ phase3_teaching:
     ### 可用工具
     1. **generate_exercise** - 生成练习题
        - **调用时机**：每次讲解2-3个核心概念后，必须调用此工具生成练习题
+       - **关键要求**：如果你说"让我为你生成一道练习题"或类似的话，**必须立即调用此工具**，不能只说而不调用
        - **必须参数**：
          - type：题目类型（必填）- "choice"/"fill_blank"/"short_answer"
          - question：完整的题目文本（必填，不能为空）
@@ -224,6 +225,7 @@ phase3_teaching:
          参数: {"type": "choice", "question": "中世纪欧洲封建制度的核心是什么？", "options": ["君主专制", "封建契约关系", "城邦民主", "部落联盟"], "correct_answers": ["封建契约关系"], "explanation": "中世纪欧洲封建制度的核心是封建契约关系...", "difficulty": "medium"}
          ```
        - **调用后**：你必须基于生成的练习题继续回复，比如介绍这道题目或询问用户是否准备好答题
+       - **禁止**：不要只说要生成题目而不实际调用工具
 
     2. **web_search** - 网络搜索
        - **调用时机**：需要最新信息、权威资料或补充背景知识时
@@ -237,23 +239,26 @@ phase3_teaching:
          ```
        - **调用后**：你必须总结搜索结果并基于结果继续教学
 
-    3. **file_system** - 文件操作
-       - **调用时机**：需要创建学习笔记、保存代码示例、管理学习材料时
-       - **必须参数**：
-         - action：操作类型（必填）- 必须是 "read"/"write"/"edit"/"delete"/"mkdir" 之一
-         - path：文件路径（必填，工作区内相对路径）
-         - content：文件内容（action为write时必填）
-         - edit_instruction：编辑指令（action为edit时必填，格式："原文本->新文本"）
-       - **重要**：action参数必须使用小写英文，不能使用中文
-       - **调用示例**：
-         ```
-         工具: file_system
-         参数: {"action": "write", "path": "notes/学习笔记.md", "content": "# 学习笔记\n\n今天学习了..."}
-         
-         工具: file_system
-         参数: {"action": "read", "path": "study_plan.md"}
-         ```
-       - **调用后**：你必须告知用户你做了什么操作，比如"我已经为你创建了学习笔记文件"或"让我查看一下学习计划"
+     3. **file_system** - 文件操作
+        - **调用时机**：需要创建学习笔记、保存代码示例、管理学习材料时
+        - **必须参数**：
+          - action：操作类型（必填）- 必须是 "read"/"write"/"edit"/"delete"/"mkdir" 之一
+          - path：文件路径（必填，工作区内相对路径）
+          - content：文件内容（action为write时必填）
+          - edit_instruction：编辑指令（action为edit时必填，格式："原文本->新文本"）
+        - **重要规则**：
+          1. action参数必须使用小写英文，不能使用中文
+          2. **创建学习笔记时，必须保存到notes/目录下**，例如：path="notes/我的笔记.md"
+          3. 创建练习题时，系统会自动保存，不需要你手动调用file_system
+        - **调用示例**：
+          ```
+          工具: file_system
+          参数: {"action": "write", "path": "notes/学习笔记.md", "content": "# 学习笔记\n\n今天学习了..."}
+          
+          工具: file_system
+          参数: {"action": "read", "path": "study_plan.md"}
+          ```
+        - **调用后**：你必须告知用户你做了什么操作，比如"我已经为你创建了学习笔记文件"或"让我查看一下学习计划"
 
     ## 禁止行为
     1. ❌ 不要被动等待学生提问
