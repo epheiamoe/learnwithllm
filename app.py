@@ -489,52 +489,73 @@ class ToolExecutor:
         path = params.get('path', '')
         content = params.get('content', '')
         edit_instruction = params.get('edit_instruction', '')
-        
+
+        # 验证必要参数
+        if not action:
+            return {'error': '缺少必要参数: action', 'hint': '请提供action参数，必须是read/write/edit/delete/mkdir之一'}
+        if not path:
+            return {'error': '缺少必要参数: path', 'hint': '请提供path参数，指定文件或目录路径'}
+
+        # 验证action值
+        valid_actions = ['read', 'write', 'edit', 'delete', 'mkdir']
+        if action not in valid_actions:
+            return {'error': f'无效的action: {action}', 'hint': f'action必须是以下之一: {", ".join(valid_actions)}'}
+
+        # 验证特定操作的必要参数
+        if action == 'write' and not content:
+            return {'error': 'write操作需要content参数', 'hint': '请提供content参数，包含要写入的内容'}
+        if action == 'edit' and not edit_instruction:
+            return {'error': 'edit操作需要edit_instruction参数', 'hint': '请提供edit_instruction参数，格式：原文本->新文本'}
+
         # 确保路径安全（限制在工作区内）
         full_path = os.path.normpath(os.path.join(workspace.path, path))
         if not full_path.startswith(workspace.path):
-            return {'error': '非法路径'}
-        
+            return {'error': '非法路径', 'hint': '路径必须在工作区内'}
+
         try:
             if action == 'read':
                 if not os.path.exists(full_path):
-                    return {'error': '文件不存在'}
+                    return {'error': f'文件不存在: {path}', 'hint': '请检查路径是否正确'}
                 with open(full_path, 'r', encoding='utf-8') as f:
                     return {'success': True, 'content': f.read()}
-            
+
             elif action == 'write':
                 os.makedirs(os.path.dirname(full_path), exist_ok=True)
                 with open(full_path, 'w', encoding='utf-8') as f:
                     f.write(content)
                 return {'success': True, 'message': f'文件已写入: {path}'}
-            
+
             elif action == 'edit':
                 if not os.path.exists(full_path):
-                    return {'error': '文件不存在'}
+                    return {'error': f'文件不存在: {path}', 'hint': '请检查路径是否正确'}
                 with open(full_path, 'r', encoding='utf-8') as f:
                     original = f.read()
                 # 简单的替换逻辑（实际应用中可以更复杂）
-                modified = original.replace(edit_instruction.split('->')[0].strip(), 
-                                          edit_instruction.split('->')[1].strip())
+                try:
+                    old_text = edit_instruction.split('->')[0].strip()
+                    new_text = edit_instruction.split('->')[1].strip()
+                    modified = original.replace(old_text, new_text)
+                except IndexError:
+                    return {'error': 'edit_instruction格式错误', 'hint': '格式应为：原文本->新文本'}
                 with open(full_path, 'w', encoding='utf-8') as f:
                     f.write(modified)
                 return {'success': True, 'message': f'文件已编辑: {path}'}
-            
+
             elif action == 'delete':
                 if os.path.exists(full_path):
                     os.remove(full_path)
                     return {'success': True, 'message': f'文件已删除: {path}'}
-                return {'error': '文件不存在'}
-            
+                return {'error': f'文件不存在: {path}', 'hint': '请检查路径是否正确'}
+
             elif action == 'mkdir':
                 os.makedirs(full_path, exist_ok=True)
                 return {'success': True, 'message': f'目录已创建: {path}'}
-            
+
             else:
-                return {'error': f'未知操作: {action}'}
+                return {'error': f'未知操作: {action}', 'hint': f'action必须是以下之一: {", ".join(valid_actions)}'}
 
         except Exception as e:
-            return {'error': str(e)}
+            return {'error': str(e), 'hint': '请检查参数格式是否正确'}
 
     def _end_inquiry(self, params: Dict[str, Any], workspace: Workspace) -> Dict[str, Any]:
         """结束询问阶段（特殊工具，仅AI可调用）"""

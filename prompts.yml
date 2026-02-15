@@ -233,9 +233,28 @@ phase3_teaching:
        - **调用时机**：需要最新信息、权威资料或补充背景知识时
 
     3. **file_system** - 文件操作
-       - 操作：read（读取）、write（写入）、mkdir（创建目录）
+       - 操作：read（读取）、write（写入）、edit（编辑）、delete（删除）、mkdir（创建目录）
        - 路径：工作区内的相对路径
+       - **重要要求**：调用此工具时，必须提供完整的参数：
+         - action：操作类型（必填，必须是read/write/edit/delete/mkdir之一）
+         - path：文件路径（必填）
+         - content：如果是write操作，必须提供内容
+         - edit_instruction：如果是edit操作，必须提供编辑指令（格式：原文本->新文本）
        - **用途**：创建学习笔记、保存代码示例、管理学习材料
+       - **示例调用**：
+         ```json
+         {
+           "action": "read",
+           "path": "study_plan.md"
+         }
+         ```
+         ```json
+         {
+           "action": "write",
+           "path": "notes/中世纪历史笔记.md",
+           "content": "# 中世纪历史笔记\n\n## 关键时期\n- 早期中世纪（500-1000年）\n- 盛期中世纪（1000-1300年）\n- 晚期中世纪（1300-1500年）"
+         }
+         ```
 
     ## 禁止行为
     1. ❌ 不要被动等待学生提问

@@ -516,7 +516,8 @@ async function sendMessage(message = null, autoStart = false) {
     }
 
     if (currentPhase === 'inquiry') {
-        if (!autoStart) {
+        // 总是将用户消息添加到历史，即使是空消息（用于触发AI开始教学）
+        if (userMessage || autoStart) {
             inquiryHistory.push({ role: 'user', content: userMessage });
         }
         await sendInquiryMessage(userMessage);
@@ -581,23 +582,33 @@ async function sendInquiryMessage(message) {
                         // 处理工具调用
                         if (data.tool_call) {
                             const toolName = data.tool_call.name;
+                            const status = data.tool_call.status;
+                            const result = data.tool_call.result;
+
                             if (toolName === 'end_inquiry') {
                                 showToolStatus('AI已收集足够信息，正在生成学习计划...', true);
                                 inquiryComplete = true;
+                                showToolCallInChat(toolName, 'inquiry_complete');
+                            } else {
+                                showToolCallInChat(toolName, status, result);
                             }
                         }
 
                         // 处理询问完成信号
                         if (data.inquiry_complete) {
+                            console.log('收到inquiry_complete信号，summary:', data.summary);
                             inquiryComplete = true;
                             showNotification('AI已收集足够信息，正在生成学习计划...', 'success');
+                            showToolCallInChat('end_inquiry', 'inquiry_complete', {summary: data.summary || 'AI已收集足够信息'});
                         }
 
                         if (data.done) {
+                            console.log('收到done信号，inquiryComplete:', inquiryComplete, 'fullResponse长度:', fullResponse.length);
                             inquiryHistory.push({ role: 'assistant', content: fullResponse });
 
                             // 如果询问完成，自动生成学习计划
                             if (inquiryComplete) {
+                                console.log('询问完成，自动生成学习计划...');
                                 setTimeout(() => {
                                     generateStudyPlan();
                                 }, 1000);
@@ -635,18 +646,22 @@ function shouldEndInquiry(response) {
 
 // 生成学习计划
 async function generateStudyPlan() {
+    console.log('开始生成学习计划，inquiryHistory长度:', inquiryHistory.length);
     showToolStatus('正在生成学习计划...', true);
-    
+
     try {
         const response = await fetch(`/api/workspaces/${workspaceId}/plan`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ history: inquiryHistory })
         });
-        
+
+        console.log('学习计划API响应状态:', response.status);
         const data = await response.json();
-        
+        console.log('学习计划API响应数据:', data);
+
         if (data.success) {
+            console.log('学习计划生成成功，更新阶段为teaching');
             currentPhase = 'teaching';
             updatePhaseIndicator();
 
@@ -657,9 +672,11 @@ async function generateStudyPlan() {
 
             // 自动发送一条空消息，让AI开始教学
             setTimeout(() => {
+                console.log('自动发送空消息开始教学');
                 sendMessage('', true); // 发送空消息触发AI开始教学
             }, 500);
         } else {
+            console.error('学习计划生成失败:', data.error);
             showNotification(data.error || '生成失败', 'error');
         }
     } catch (error) {
@@ -721,7 +738,12 @@ async function sendTeachingMessage(message) {
                         }
                         
                         if (data.tool_call) {
-                            showToolStatus(`正在${getToolName(data.tool_call.name)}...`, true);
+                            const toolName = data.tool_call.name;
+                            const status = data.tool_call.status;
+                            const result = data.tool_call.result;
+
+                            showToolStatus(`正在${getToolName(toolName)}...`, true);
+                            showToolCallInChat(toolName, status, result);
                         }
                         
                         if (data.status === 'context_compressed') {
@@ -770,13 +792,76 @@ function getToolName(name) {
 function showToolStatus(text, show) {
     const bar = document.getElementById('toolStatusBar');
     const statusText = document.getElementById('toolStatusText');
-    
+
     if (show && text) {
         statusText.textContent = text;
         bar.style.display = 'flex';
     } else {
         bar.style.display = 'none';
     }
+}
+
+// 在聊天区域显示工具调用信息
+function showToolCallInChat(toolName, status, result = null) {
+    const container = document.getElementById('messagesContainer');
+    const toolDiv = document.createElement('div');
+    toolDiv.className = 'message message-tool';
+
+    let statusText = '';
+    let statusClass = '';
+
+    switch(status) {
+        case 'started':
+            statusText = `正在${getToolName(toolName)}...`;
+            statusClass = 'tool-status-started';
+            break;
+        case 'completed':
+            statusText = `${getToolName(toolName)}完成`;
+            statusClass = 'tool-status-completed';
+            break;
+        case 'error':
+            statusText = `${getToolName(toolName)}失败`;
+            statusClass = 'tool-status-error';
+            break;
+        case 'inquiry_complete':
+            statusText = 'AI已收集足够信息，正在生成学习计划...';
+            statusClass = 'tool-status-inquiry-complete';
+            break;
+        default:
+            statusText = `${getToolName(toolName)}: ${status}`;
+            statusClass = 'tool-status-other';
+    }
+
+    let resultHtml = '';
+    if (result) {
+        if (result.error) {
+            resultHtml = `<div class="tool-error">错误: ${escapeHtml(result.error)}</div>`;
+            if (result.hint) {
+                resultHtml += `<div class="tool-hint">提示: ${escapeHtml(result.hint)}</div>`;
+            }
+        } else if (result.success) {
+            resultHtml = `<div class="tool-success">成功: ${escapeHtml(result.message || '操作完成')}</div>`;
+        }
+    }
+
+    toolDiv.innerHTML = `
+        <div class="message-card">
+            <div class="message-header">
+                <span class="message-sender">工具调用</span>
+                <span class="message-time">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+            <div class="message-content">
+                <div class="tool-call-info ${statusClass}">
+                    <span class="tool-name">${getToolName(toolName)}</span>
+                    <span class="tool-status">${statusText}</span>
+                </div>
+                ${resultHtml}
+            </div>
+        </div>
+    `;
+
+    container.appendChild(toolDiv);
+    scrollToBottom();
 }
 
 
