@@ -1243,6 +1243,45 @@ def read_file(workspace_id, file_path):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/workspaces/<workspace_id>/export', methods=['GET'])
+def export_conversation(workspace_id):
+    """导出对话记录为JSON格式"""
+    workspace = workspace_manager.get_workspace(workspace_id)
+    if not workspace:
+        return jsonify({'success': False, 'error': '工作区不存在'}), 404
+
+    # 构建完整的导出数据
+    export_data = {
+        'metadata': {
+            'workspace_id': workspace.id,
+            'theme': workspace.theme,
+            'created_at': workspace.created_at,
+            'current_phase': workspace.current_phase,
+            'export_timestamp': datetime.now().isoformat(),
+            'version': '1.0'
+        },
+        'conversation': workspace.messages,
+        'study_plan': '',
+        'files': []
+    }
+
+    # 读取学习计划
+    study_plan_path = os.path.join(workspace.path, 'study_plan.md')
+    if os.path.exists(study_plan_path):
+        with open(study_plan_path, 'r', encoding='utf-8') as f:
+            export_data['study_plan'] = f.read()
+
+    # 获取文件列表
+    file_tree = workspace_manager.get_file_tree(workspace_id)
+    export_data['files'] = file_tree
+
+    # 设置响应头，触发文件下载
+    response = jsonify(export_data)
+    response.headers['Content-Disposition'] = f'attachment; filename=conversation-{workspace_id}-{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+    response.headers['Content-Type'] = 'application/json'
+
+    return response
+
 @app.route('/api/tools/execute', methods=['POST'])
 def execute_tool():
     """执行工具"""
@@ -1250,11 +1289,11 @@ def execute_tool():
     workspace_id = data.get('workspace_id')
     tool_name = data.get('tool')
     params = data.get('params', {})
-    
+
     workspace = workspace_manager.get_workspace(workspace_id)
     if not workspace:
         return jsonify({'success': False, 'error': '工作区不存在'}), 404
-    
+
     result = tool_executor.execute(tool_name, params, workspace)
     return jsonify(result)
 

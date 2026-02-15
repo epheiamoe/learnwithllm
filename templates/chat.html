@@ -140,9 +140,9 @@
             </div>
             <p class="input-hint">按 Enter 发送，Shift + Enter 换行</p>
 
-            <!-- 生成学习计划按钮（仅在询问阶段显示） -->
+            <!-- 生成学习计划按钮（备用选项） -->
             <div class="generate-plan-container" id="generatePlanContainer" style="display: none;">
-                <button class="btn btn-primary btn-block" onclick="generateStudyPlan()" id="generatePlanBtn">
+                <button class="btn btn-secondary btn-block" onclick="generateStudyPlan()" id="generatePlanBtn">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                         <polyline points="14 2 14 8 20 8"/>
@@ -150,9 +150,9 @@
                         <line x1="16" y1="17" x2="8" y2="17"/>
                         <polyline points="10 9 9 9 8 9"/>
                     </svg>
-                    生成学习计划
+                    手动生成学习计划
                 </button>
-                <p class="plan-hint">当AI表示已收集足够信息时，点击此按钮生成个性化学习计划</p>
+                <p class="plan-hint">如果AI没有自动生成学习计划，可以点击此按钮手动触发</p>
             </div>
         </div>
     </main>
@@ -325,7 +325,8 @@ function updatePhaseIndicator() {
 
     // 更新生成学习计划按钮的显示状态
     const generatePlanContainer = document.getElementById('generatePlanContainer');
-    if (currentPhase === 'inquiry') {
+    // 只在询问阶段开始时显示，当AI开始询问后就隐藏
+    if (currentPhase === 'inquiry' && inquiryHistory.length === 0) {
         generatePlanContainer.style.display = 'block';
     } else {
         generatePlanContainer.style.display = 'none';
@@ -355,24 +356,27 @@ function startInquiry() {
 }
 
 // 发送消息
-async function sendMessage() {
+async function sendMessage(message = null, autoStart = false) {
     if (isGenerating) return;
-    
+
     const input = document.getElementById('messageInput');
-    const message = input.value.trim();
-    
-    if (!message) return;
-    
-    input.value = '';
-    autoResize(input);
-    
-    appendMessage('user', message);
-    
+    const userMessage = message !== null ? message : input.value.trim();
+
+    if (!userMessage && !autoStart) return;
+
+    if (!autoStart) {
+        input.value = '';
+        autoResize(input);
+        appendMessage('user', userMessage);
+    }
+
     if (currentPhase === 'inquiry') {
-        inquiryHistory.push({ role: 'user', content: message });
-        await sendInquiryMessage(message);
+        if (!autoStart) {
+            inquiryHistory.push({ role: 'user', content: userMessage });
+        }
+        await sendInquiryMessage(userMessage);
     } else {
-        await sendTeachingMessage(message);
+        await sendTeachingMessage(userMessage);
     }
 }
 
@@ -430,7 +434,7 @@ async function sendInquiryMessage(message) {
                         if (data.tool_call) {
                             const toolName = data.tool_call.name;
                             if (toolName === 'end_inquiry') {
-                                showToolStatus('AI已收集足够信息，可以生成学习计划', true);
+                                showToolStatus('AI已收集足够信息，正在生成学习计划...', true);
                                 inquiryComplete = true;
                             }
                         }
@@ -438,17 +442,17 @@ async function sendInquiryMessage(message) {
                         // 处理询问完成信号
                         if (data.inquiry_complete) {
                             inquiryComplete = true;
-                            showNotification('AI已收集足够信息，可以生成学习计划', 'success');
+                            showNotification('AI已收集足够信息，正在生成学习计划...', 'success');
                         }
 
                         if (data.done) {
                             inquiryHistory.push({ role: 'assistant', content: fullResponse });
 
-                            // 如果询问完成，高亮显示生成计划按钮
+                            // 如果询问完成，自动生成学习计划
                             if (inquiryComplete) {
-                                const generatePlanBtn = document.getElementById('generatePlanBtn');
-                                generatePlanBtn.classList.add('pulse');
-                                showNotification('点击"生成学习计划"按钮继续', 'info');
+                                setTimeout(() => {
+                                    generateStudyPlan();
+                                }, 1000);
                             }
                         }
                     } catch (e) {
@@ -497,16 +501,16 @@ async function generateStudyPlan() {
         if (data.success) {
             currentPhase = 'teaching';
             updatePhaseIndicator();
-            
-            // 显示教学开始消息
-            const startMsg = `[教学开始] 已根据您的需求制定学习计划，现在开始正式学习...
 
-你可以随时问我问题，我会根据计划引导你学习。点击左侧"查看学习计划"可以随时查看完整的学习大纲。`;
-            
-            appendMessage('assistant', startMsg);
+            // 不再显示预设消息，让AI生成第一句话
             document.getElementById('studyPlanLink').style.display = 'block';
-            
-            showNotification('学习计划已生成', 'success');
+
+            showNotification('学习计划已生成，AI将开始教学', 'success');
+
+            // 自动发送一条空消息，让AI开始教学
+            setTimeout(() => {
+                sendMessage('', true); // 发送空消息触发AI开始教学
+            }, 500);
         } else {
             showNotification(data.error || '生成失败', 'error');
         }
@@ -882,23 +886,22 @@ function hideStudyPlan() {
 function appendMessage(role, content, isStreaming = false) {
     const container = document.getElementById('messagesContainer');
     const welcomeMsg = document.getElementById('welcomeMessage');
-    
+
     if (welcomeMsg) {
         welcomeMsg.style.display = 'none';
     }
-    
+
     const messageDiv = document.createElement('div');
     messageDiv.className = `message message-${role}`;
-    
-    const avatar = role === 'user' ? '👤' : '🤖';
+
     const name = role === 'user' ? '你' : 'AI助手';
-    
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
     messageDiv.innerHTML = `
-        <div class="message-avatar">${avatar}</div>
-        <div class="message-content-wrapper">
+        <div class="message-card">
             <div class="message-header">
-                <span class="message-name">${name}</span>
-                <span class="message-time">${new Date().toLocaleTimeString()}</span>
+                <span class="message-sender">${name}</span>
+                <span class="message-time">${time}</span>
             </div>
             <div class="message-content">${isStreaming ? '' : formatMessage(content)}</div>
             ${role === 'assistant' && !isStreaming ? `
@@ -1068,22 +1071,27 @@ function clearChat() {
 
 // 导出对话
 function exportChat() {
-    const messages = [];
-    document.querySelectorAll('.message').forEach(msg => {
-        const role = msg.classList.contains('message-user') ? 'user' : 'assistant';
-        const content = msg.querySelector('.message-content').innerText;
-        messages.push({ role, content });
-    });
-    
-    const blob = new Blob([JSON.stringify(messages, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `chat-${workspaceId}-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    
-    showNotification('对话已导出', 'success');
+    // 使用后端API导出完整的对话记录
+    fetch(`/api/workspaces/${workspaceId}/export`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('导出失败');
+            }
+            return response.blob();
+        })
+        .then(blob => {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `conversation-${workspaceId}-${Date.now()}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            showNotification('对话已导出为JSON格式', 'success');
+        })
+        .catch(error => {
+            console.error('导出错误:', error);
+            showNotification('导出失败: ' + error.message, 'error');
+        });
 }
 
 // 通知系统
