@@ -7,6 +7,8 @@ AI协作学习助手 - 基于结构化上下文管理的个人智能导师
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 
+
+
 ## 介绍
 
 您好！这是我全程用AI开发的小工具，所以可能有很多问题。如果您追求稳定使用，请不要使用它。但无论如何，希望它帮助到您。
