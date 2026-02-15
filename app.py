@@ -322,12 +322,13 @@ workspace_manager = WorkspaceManager()
 
 class ToolExecutor:
     """工具执行器"""
-    
+
     def __init__(self):
         self.tools = {
             'generate_exercise': self._generate_exercise,
             'web_search': self._web_search,
-            'file_system': self._file_system
+            'file_system': self._file_system,
+            'end_inquiry': self._end_inquiry  # 新增：结束询问工具
         }
     
     def execute(self, tool_name: str, params: Dict[str, Any], workspace: Workspace) -> Dict[str, Any]:
@@ -510,9 +511,24 @@ class ToolExecutor:
             
             else:
                 return {'error': f'未知操作: {action}'}
-        
+
         except Exception as e:
             return {'error': str(e)}
+
+    def _end_inquiry(self, params: Dict[str, Any], workspace: Workspace) -> Dict[str, Any]:
+        """结束询问阶段（特殊工具，仅AI可调用）"""
+        # 这个工具由AI在询问阶段结束时调用
+        # 它不会真正执行什么操作，只是作为一个信号
+
+        summary = params.get('summary', '')
+        logger.info(f"AI请求结束询问阶段，总结: {summary[:100]}...")
+
+        return {
+            'success': True,
+            'message': '询问阶段已结束，可以生成学习计划',
+            'summary': summary,
+            'inquiry_complete': True
+        }
 
 tool_executor = ToolExecutor()
 
@@ -654,39 +670,95 @@ Format: Structured markdown with clear headings.
 
 llm_service = LLMService()
 
-# ==================== 提示词模板 ====================
+# ==================== 提示词管理 ====================
 
-PHASE1_INQUIRY_PROMPT = """You are a learning consultant. Your goal is to understand the user's learning needs thoroughly.
+class PromptManager:
+    """提示词管理器"""
 
-## IMPORTANT RULES:
-1. **DO NOT provide any teaching, explanations, or answers** in this phase
-2. **DO NOT use any tools** - this is inquiry phase only
-3. **DO NOT generate exercises or search for information**
-4. **ONLY ask questions** to gather information for the study plan
+    def __init__(self):
+        self.prompts = self._load_prompts()
 
-Ask precise questions to clarify:
-1. Learning goals - What specific skills or knowledge do they want to gain?
-2. Background - What's their current level and prior knowledge?
-3. Preferred depth - Surface overview or deep dive?
-4. Time commitment - How much time can they dedicate?
-5. Learning style - Prefer examples, theory, or hands-on practice?
+    def _load_prompts(self) -> Dict[str, Any]:
+        """加载提示词配置"""
+        prompts_file = "prompts.yml"
+        if not os.path.exists(prompts_file):
+            logger.warning(f"提示词配置文件不存在: {prompts_file}，使用默认提示词")
+            return self._get_default_prompts()
 
-Ask ONE question at a time. Wait for the user's response before asking the next.
-Be conversational but focused. Your questions should help build a personalized study plan.
+        try:
+            with open(prompts_file, 'r', encoding='utf-8') as f:
+                prompts = yaml.safe_load(f)
+            logger.info("提示词配置加载成功")
+            return prompts
+        except Exception as e:
+            logger.error(f"加载提示词配置失败: {str(e)}，使用默认提示词")
+            return self._get_default_prompts()
 
-When you have gathered enough information (usually 3-5 questions), say: "I have enough information now. Please click the 'Generate Study Plan' button to create your personalized learning plan."
+    def _get_default_prompts(self) -> Dict[str, Any]:
+        """获取默认提示词"""
+        return {
+            'phase1_inquiry': {
+                'system': """# 角色：学习需求分析师
 
-Current user input: {user_input}
-"""
+## 核心任务
+通过3-5个精准问题，快速了解用户的学习需求。
 
-PHASE2_TEACHING_PROMPT = """[SYSTEM]
-You are an expert tutor following the study plan. Be encouraging, clear, and adaptive.
-Current context limit: {max_context}K tokens.
-Token usage: {token_count} / {token_threshold}
+## 严格规则
+1. **禁止教学**：此阶段只提问，不提供任何教学、解释或答案
+2. **禁止工具**：不使用任何工具
+3. **禁止建议**：不提供学习建议或资源推荐
+4. **专注提问**：每次只问一个问题，等待用户回答后再问下一个
 
-Critical: If you need to use tools, emit JSON in <tool_call> tags like this:
-<tool_call>{{"name": "tool_name", "parameters": {{...}}}}</tool_call>
+## 提问框架
+按以下顺序收集关键信息：
+1. **学习目标**：想达到什么具体成果？
+2. **当前水平**：对主题有多少了解？
+3. **时间投入**：每周能投入多少时间学习？
+4. **学习偏好**：更喜欢理论讲解、实践练习还是项目驱动？
 
+## 结束条件
+当收集到足够信息（通常3-5个问题）时，使用以下标准结束语：
+"我已经了解了你的学习需求。请点击「生成学习计划」按钮，我将为你制定个性化的学习方案。"
+
+## 响应风格
+- 简洁直接，避免冗长
+- 问题具体明确，易于回答
+- 保持友好但专业的语气"""
+            },
+            'phase2_plan_generation': {
+                'system': """# 角色：课程设计师
+
+## 任务
+根据需求询问阶段的对话，制定一个**简洁实用**的学习计划。
+
+## 自适应原则
+1. **根据用户背景调整**：新手用简单结构，有基础用中等结构
+2. **根据主题复杂度调整**：简单概念用简单计划，系统知识用详细计划
+3. **根据时间投入调整**：时间少则聚焦核心，时间多则全面覆盖
+
+## 输出要求
+- 使用Markdown格式
+- 语言简洁明了
+- 避免过度学术化
+- 提供可执行的建议"""
+            },
+            'phase3_teaching': {
+                'system': """[SYSTEM]
+角色：个性化学习导师
+
+当前上下文限制：{max_context}K tokens
+Token使用情况：{token_count} / {token_threshold}
+
+## 教学原则
+1. **循序渐进**：按照学习计划逐步推进
+2. **因材施教**：根据学生水平调整教学深度
+3. **注重实践**：理论结合实践，及时练习
+
+## 工具使用规范
+需要调用工具时，使用标准格式：
+<tool_call>{"name": "工具名称", "parameters": {参数}}</tool_call>
+
+## 上下文管理
 [STUDY_PLAN]
 {study_plan}
 
@@ -695,19 +767,52 @@ Critical: If you need to use tools, emit JSON in <tool_call> tags like this:
 
 {lesson_context}
 
-[RECENT_EXCHANGES]
+[最近对话]
 {recent_exchanges}
 
-[AVAILABLE_TOOLS]
-1. generate_exercise(type: "fill_blank|choice|short_answer|match|multi_fill", question, options, blanks, correct_answers, explanation, difficulty)
-2. web_search(query, max_results=5)
-3. file_system(action: "read|write|edit|mkdir", path, content, edit_instruction)
+[工作区文件]
+{file_tree}
 
-[WORKSPACE_FILES]
-Current files: {file_tree}
+## 响应风格
+- 使用Markdown格式化内容
+- 代码示例放在代码块中
+- 重要概念加粗强调
+- 保持友好鼓励的语气"""
+            },
+            'end_phrases': {
+                'inquiry_complete': "我已经了解了你的学习需求。请点击「生成学习计划」按钮，我将为你制定个性化的学习方案。",
+                'teaching_welcome': "[教学开始] 已根据你的需求制定学习计划，现在开始正式学习。\n\n你可以随时问我问题，我会根据计划引导你学习。点击左侧\"查看学习计划\"可以随时查看完整的学习大纲。"
+            }
+        }
 
-Respond naturally as a tutor. Use markdown for formatting. Include code blocks when teaching programming concepts.
-"""
+    def get_inquiry_prompt(self, user_input: str = "") -> str:
+        """获取询问阶段提示词"""
+        prompt = self.prompts.get('phase1_inquiry', {}).get('system', '')
+        if user_input:
+            prompt += f"\n\n当前用户输入: {user_input}"
+        return prompt
+
+    def get_plan_generation_prompt(self, inquiry_summary: str) -> str:
+        """获取学习计划生成提示词"""
+        base_prompt = self.prompts.get('phase2_plan_generation', {}).get('system', '')
+        return f"{base_prompt}\n\n需求询问总结:\n{inquiry_summary}"
+
+    def get_teaching_prompt(self, **kwargs) -> str:
+        """获取教学阶段提示词"""
+        prompt_template = self.prompts.get('phase3_teaching', {}).get('system', '')
+
+        # 替换变量
+        for key, value in kwargs.items():
+            placeholder = f"{{{key}}}"
+            prompt_template = prompt_template.replace(placeholder, str(value))
+
+        return prompt_template
+
+    def get_end_phrase(self, phrase_type: str) -> str:
+        """获取结束语"""
+        return self.prompts.get('end_phrases', {}).get(phrase_type, '')
+
+prompt_manager = PromptManager()
 
 # ==================== 路由 ====================
 
@@ -777,44 +882,103 @@ Created: {workspace.created_at}
 
 @app.route('/api/workspaces/<workspace_id>/inquiry', methods=['POST'])
 def inquiry_chat(workspace_id):
-    """阶段一：启动询问"""
+    """阶段一：启动询问（允许AI调用end_inquiry工具）"""
     workspace = workspace_manager.get_workspace(workspace_id)
     if not workspace:
         return jsonify({'success': False, 'error': '工作区不存在'}), 404
-    
+
     data = request.json
     user_input = data.get('message', '')
     history = data.get('history', [])
-    
-    # 构建消息 - 需求询问阶段禁止工具调用
-    messages = [
-        {'role': 'system', 'content': PHASE1_INQUIRY_PROMPT.format(user_input=user_input)}
-    ]
 
+    # 构建系统提示词
+    system_prompt = prompt_manager.get_inquiry_prompt(user_input)
+
+    # 构建消息列表
+    messages = [{'role': 'system', 'content': system_prompt}]
     for msg in history:
         messages.append({'role': msg['role'], 'content': msg['content']})
-
     messages.append({'role': 'user', 'content': user_input})
-    
+
+    # 定义询问阶段可用的工具（仅end_inquiry）
+    inquiry_tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "end_inquiry",
+                "description": "结束需求询问阶段，表示已收集足够信息可以生成学习计划",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "summary": {
+                            "type": "string",
+                            "description": "对收集到的学习需求的简要总结"
+                        }
+                    },
+                    "required": ["summary"]
+                }
+            }
+        }
+    ]
+
     def generate():
         full_response = ""
-        for chunk in llm_service.chat_completion(messages, stream=True):
-            data = json.loads(chunk[6:]) if chunk.startswith('data: ') else {}
+        tool_calls_buffer = []
+
+        for chunk in llm_service.chat_completion(messages, stream=True, tools=inquiry_tools):
+            if not chunk.startswith('data: '):
+                continue
+
+            data_str = chunk[6:]
+            if data_str == '[DONE]':
+                break
+
+            try:
+                data = json.loads(data_str)
+            except:
+                continue
+
             if 'error' in data:
                 yield f"data: {json.dumps({'error': data['error']})}\n\n"
                 return
-            
+
             if 'choices' in data and len(data['choices']) > 0:
-                delta = data['choices'][0].get('delta', {})
+                choice = data['choices'][0]
+                delta = choice.get('delta', {})
+
+                # 处理工具调用
+                if 'tool_calls' in delta:
+                    for tc in delta['tool_calls']:
+                        tool_calls_buffer.append(tc)
+                        if 'function' in tc and 'name' in tc['function']:
+                            tool_name = tc['function']['name']
+                            if tool_name == 'end_inquiry':
+                                yield f"data: {json.dumps({'tool_call': {'name': tool_name, 'status': 'inquiry_complete'}})}\n\n"
+
+                # 处理普通内容
                 content = delta.get('content', '')
                 if content:
                     full_response += content
                     yield f"data: {json.dumps({'content': content})}\n\n"
-        
+
+        # 如果有工具调用，执行它们
+        if tool_calls_buffer:
+            for tc in tool_calls_buffer:
+                if 'function' in tc and tc['function']['name'] == 'end_inquiry':
+                    # 执行end_inquiry工具
+                    params = tc['function'].get('arguments', '{}')
+                    try:
+                        params_dict = json.loads(params)
+                        result = tool_executor.execute('end_inquiry', params_dict, workspace)
+                        if result.get('inquiry_complete'):
+                            yield f"data: {json.dumps({'inquiry_complete': True, 'summary': result.get('summary', '')})}\n\n"
+                    except Exception as e:
+                        logger.error(f"执行end_inquiry工具失败: {str(e)}")
+
         yield f"data: {json.dumps({'done': True, 'full_response': full_response})}\n\n"
         yield "data: [DONE]\n\n"
-    
-    return Response(stream_with_context(generate()), 
+
+    return Response(stream_with_context(generate()),
                    mimetype='text/event-stream',
                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
 
@@ -824,32 +988,20 @@ def generate_study_plan(workspace_id):
     workspace = workspace_manager.get_workspace(workspace_id)
     if not workspace:
         return jsonify({'success': False, 'error': '工作区不存在'}), 404
-    
+
     data = request.json
     inquiry_history = data.get('history', [])
-    
-    # 构建提示词
-    plan_prompt = """Based on the inquiry conversation, create a comprehensive study plan in markdown format.
 
-The study plan should include:
-1. Overview of learning objectives
-2. Prerequisites and assumed knowledge
-3. Detailed topic breakdown with estimated time for each
-4. Suggested learning resources
-5. Practice exercises and projects
-6. Milestones and checkpoints
-
-Format as a well-structured markdown document with clear headings.
-
-Inquiry Summary:
-"""
-    
+    # 构建询问总结
+    inquiry_summary = ""
     for msg in inquiry_history:
-        plan_prompt += f"\n{msg['role']}: {msg['content']}"
-    
+        inquiry_summary += f"\n{msg['role']}: {msg['content'][:200]}"  # 限制长度
+
+    # 使用提示词管理器构建提示词
+    plan_prompt = prompt_manager.get_plan_generation_prompt(inquiry_summary)
+
     messages = [
-        {'role': 'system', 'content': 'You are an expert curriculum designer.'},
-        {'role': 'user', 'content': plan_prompt}
+        {'role': 'system', 'content': plan_prompt}
     ]
     
     response_chunks = []
@@ -910,9 +1062,9 @@ def teaching_chat(workspace_id):
     file_tree = workspace_manager.get_file_tree(workspace_id)
     file_tree_str = "\n".join([f["path"] for f in file_tree[:20]])  # 限制数量
     
-    # 构建系统提示词
+    # 使用提示词管理器构建系统提示词
     max_context = config_manager.get_model_max_context(llm_service.model) // 1000
-    system_prompt = PHASE2_TEACHING_PROMPT.format(
+    system_prompt = prompt_manager.get_teaching_prompt(
         max_context=max_context,
         token_count=workspace.token_count,
         token_threshold=workspace.token_threshold,

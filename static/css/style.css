@@ -1920,3 +1920,53 @@ body {
         overflow: visible;
     }
 }
+
+/* ========================================
+   按钮动画效果
+   ======================================== */
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+    }
+}
+
+.btn.pulse {
+    animation: pulse 2s infinite;
+    position: relative;
+}
+
+/* 生成学习计划按钮特殊样式 */
+.generate-plan-container {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(168, 85, 247, 0.1));
+    border-radius: 0.75rem;
+    border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.generate-plan-container .btn-primary {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    border: none;
+    font-weight: 600;
+    font-size: 1rem;
+    padding: 0.75rem 1.5rem;
+    transition: all 0.3s ease;
+}
+
+.generate-plan-container .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(59, 130, 246, 0.3);
+}
+
+.plan-hint {
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    color: #6b7280;
+    text-align: center;
+}

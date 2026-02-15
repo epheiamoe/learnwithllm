@@ -380,10 +380,11 @@ async function sendMessage() {
 async function sendInquiryMessage(message) {
     isGenerating = true;
     showToolStatus('AI正在思考...', true);
-    
+
     const responseDiv = appendMessage('assistant', '', true);
     let fullResponse = '';
-    
+    let inquiryComplete = false;
+
     try {
         const response = await fetch(`/api/workspaces/${workspaceId}/inquiry`, {
             method: 'POST',
@@ -393,40 +394,62 @@ async function sendInquiryMessage(message) {
                 history: inquiryHistory
             })
         });
-        
+
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
-        
+
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            
+
             const chunk = decoder.decode(value);
             const lines = chunk.split('\n');
-            
+
             for (const line of lines) {
                 if (line.startsWith('data: ')) {
                     const dataStr = line.slice(6);
                     if (dataStr === '[DONE]') continue;
-                    
+
                     try {
                         const data = JSON.parse(dataStr);
-                        
+
                         if (data.error) {
                             responseDiv.innerHTML = `<span class="error">错误: ${data.error}</span>`;
                             isGenerating = false;
                             showToolStatus('', false);
                             return;
                         }
-                        
+
                         if (data.content) {
                             fullResponse += data.content;
                             responseDiv.innerHTML = formatMessage(fullResponse);
                             scrollToBottom();
                         }
-                        
+
+                        // 处理工具调用
+                        if (data.tool_call) {
+                            const toolName = data.tool_call.name;
+                            if (toolName === 'end_inquiry') {
+                                showToolStatus('AI已收集足够信息，可以生成学习计划', true);
+                                inquiryComplete = true;
+                            }
+                        }
+
+                        // 处理询问完成信号
+                        if (data.inquiry_complete) {
+                            inquiryComplete = true;
+                            showNotification('AI已收集足够信息，可以生成学习计划', 'success');
+                        }
+
                         if (data.done) {
                             inquiryHistory.push({ role: 'assistant', content: fullResponse });
+
+                            // 如果询问完成，高亮显示生成计划按钮
+                            if (inquiryComplete) {
+                                const generatePlanBtn = document.getElementById('generatePlanBtn');
+                                generatePlanBtn.classList.add('pulse');
+                                showNotification('点击"生成学习计划"按钮继续', 'info');
+                            }
                         }
                     } catch (e) {
                         console.error('解析错误:', e);

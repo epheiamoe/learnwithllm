@@ -153,20 +153,35 @@ python setup.py
 
 ## 常见问题修复
 
-### 问题：AI在需求询问阶段就开始教学
-**修复版本**: v1.1.0
-**问题描述**: AI在需求询问阶段就开始提供教学内容和工具调用
+### 问题：AI在需求询问阶段不会主动进入教学
+**修复版本**: v2.0.0
+**问题描述**: AI在需求询问阶段不会主动结束询问，需要用户手动点击按钮
 **解决方案**:
-1. 强化`PHASE1_INQUIRY_PROMPT`提示词，明确禁止教学和工具使用
-2. 添加明确的阶段结束信号："I have enough information now. Please click the 'Generate Study Plan' button..."
-3. 前端添加"生成学习计划"按钮，只在询问阶段显示
-4. 实现工作区状态持久化（`workspace_state.json`）
+1. 添加`end_inquiry`工具，让AI可以主动结束询问阶段
+2. 优化提示词，明确告诉AI在收集足够信息后调用`end_inquiry`工具
+3. 前端自动检测`end_inquiry`工具调用，高亮显示生成计划按钮
+4. 将提示词分离到独立的`prompts.yml`配置文件
 
 **检查点**:
-1. 确认`PHASE1_INQUIRY_PROMPT`包含明确的禁止规则
-2. 确认`inquiry_chat`路由不传递工具参数
-3. 确认`workspace_state.json`正确保存和加载阶段信息
-4. 确认前端"生成学习计划"按钮只在`currentPhase === 'inquiry'`时显示
+1. 确认`prompts.yml`文件存在并包含正确的提示词
+2. 确认`ToolExecutor`类包含`_end_inquiry`方法
+3. 确认`inquiry_chat`路由传递`end_inquiry`工具定义
+4. 确认前端`sendInquiryMessage`函数能处理工具调用
+5. 确认生成学习计划按钮有脉冲动画效果
+
+### 问题：学习计划过于复杂，小题大做
+**修复版本**: v2.0.0
+**问题描述**: 简单的学习任务生成了过于复杂的学习计划
+**解决方案**:
+1. 在`prompts.yml`中添加自适应学习计划生成逻辑
+2. 根据主题复杂度和用户背景调整计划详细程度
+3. 提供简单、中等、复杂三种计划模板
+4. 优化提示词，强调简洁实用
+
+**检查点**:
+1. 确认`prompts.yml`中的`phase2_plan_generation`包含自适应逻辑
+2. 确认`generate_study_plan`函数使用新的提示词管理器
+3. 确认学习计划输出简洁明了，适合用户水平
 
 ### 问题：无法正常进入正式教学
 **检查点**:
