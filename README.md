@@ -38,13 +38,20 @@ AI协作学习助手 - 基于结构化上下文管理的个人智能导师
 
 ## 快速开始
 
-### 1. 安装依赖
+### 1.克隆仓库
+
+```bash
+git clone https://github.com/epheiamoe/learnwithllm.git
+cd learnwithllm
+```
+
+### 2. 安装依赖
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. 配置
+### 3. 配置
 
 首次运行需要配置LLM和搜索服务：
 
@@ -59,7 +66,7 @@ python setup.py
 - 默认模型
 - 搜索引擎（可选）
 
-### 3. 启动应用
+### 4. 启动应用
 
 ```bash
 python app.py
@@ -90,14 +97,14 @@ workspace_root: "./workspaces"
 
 ### 支持的LLM提供商
 
-| 提供商             | base_url                                                | 推荐模型             |
-| --------------- | ------------------------------------------------------- | ---------------- |
-| OpenAI          | https://api.openai.com/v1                               | gpt-4o, gpt-5.2  |
-| Google (Gemini) | https://generativelanguage.googleapis.com/v1beta/openai | gemini-2.5-flash |
-| Kimi (Moonshot) | https://api.moonshot.cn/v1                              | kimi-k2.5        |
-| xAI (Grok)      | https://api.x.ai/v1                                     | grok-4.1         |
-| DeepSeek        | https://api.deepseek.com/v1                             | deepseek-chat    |
-| OpenRouter      | https://openrouter.ai/api/v1                            | openai/gpt-4o    |
+| 提供商             | base_url                                                | 推荐模型                                         |
+| --------------- | ------------------------------------------------------- | -------------------------------------------- |
+| OpenAI          | https://api.openai.com/v1                               | gpt-4o, gpt-5.2                              |
+| Google (Gemini) | https://generativelanguage.googleapis.com/v1beta/openai | gemini-3-flash-preview, gemini-3-pro-preview |
+| Kimi (Moonshot) | https://api.moonshot.cn/v1                              | kimi-k2.5, kimi-k2                           |
+| xAI (Grok)      | https://api.x.ai/v1                                     | grok-4.1                                     |
+| DeepSeek        | https://api.deepseek.com/v1                             | deepseek-chat                                |
+| OpenRouter      | https://openrouter.ai/api/v1                            | openai/gpt-4o                                |
 
 ### 搜索引擎配置
 
