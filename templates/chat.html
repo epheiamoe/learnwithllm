@@ -922,6 +922,9 @@ function showToolCallInChat(toolName, status, result = null) {
 
 // 显示练习题
 function showExercise(exercise) {
+    // 确保currentExercise被正确设置，这是提交答案的关键
+    currentExercise = exercise;
+    
     // 如果练习题还没有ID，添加到右侧栏
     if (!exercise.id) {
         addExerciseToSidebar(exercise);

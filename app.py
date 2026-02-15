@@ -1433,141 +1433,23 @@ def teaching_chat(workspace_id):
 
     def generate():
         full_response = ""
-        # 使用字典存储工具调用，按index合并，支持多个工具调用
-        tool_calls_dict = {}
+        all_tool_results = []
+        all_tool_calls = []
 
-        # 第一次调用：获取AI的回复（可能包含工具调用）
-        for chunk in llm_service.chat_completion(messages, stream=True, tools=tools):
-            if not chunk.startswith("data: "):
-                continue
+        # 使用循环支持多次工具调用
+        max_iterations = 5  # 防止无限循环
+        iteration = 0
 
-            data_str = chunk[6:]
-            if data_str == "[DONE]":
-                break
+        # 当前消息列表（会在循环中更新）
+        current_messages: List[Dict[str, Any]] = messages.copy()  # type: ignore
 
-            try:
-                data = json.loads(data_str)
-            except:
-                continue
+        while iteration < max_iterations:
+            iteration += 1
+            tool_calls_dict = {}
 
-            if "error" in data:
-                yield f"data: {json.dumps({'error': data['error']})}\n\n"
-                return
-
-            if "choices" in data and len(data["choices"]) > 0:
-                choice = data["choices"][0]
-                delta = choice.get("delta", {})
-
-                # 处理工具调用
-                if "tool_calls" in delta:
-                    for tc in delta["tool_calls"]:
-                        # 获取工具调用的index
-                        tc_index = tc.get("index", 0)
-
-                        # 初始化或更新该index的工具调用
-                        if tc_index not in tool_calls_dict:
-                            tool_calls_dict[tc_index] = {
-                                "index": tc_index,
-                                "function": {},
-                            }
-
-                        # 合并工具调用信息
-                        if "id" in tc:
-                            tool_calls_dict[tc_index]["id"] = tc["id"]
-                        if "type" in tc:
-                            tool_calls_dict[tc_index]["type"] = tc["type"]
-                        if "function" in tc:
-                            func = tc["function"]
-                            if "name" in func:
-                                tool_calls_dict[tc_index]["function"]["name"] = func[
-                                    "name"
-                                ]
-                                tool_name = func["name"]
-                                yield f"data: {json.dumps({'tool_call': {'name': tool_name, 'status': 'started'}})}\n\n"
-                            if "arguments" in func:
-                                # 累积参数
-                                if (
-                                    "arguments"
-                                    not in tool_calls_dict[tc_index]["function"]
-                                ):
-                                    tool_calls_dict[tc_index]["function"][
-                                        "arguments"
-                                    ] = ""
-                                tool_calls_dict[tc_index]["function"]["arguments"] += (
-                                    func["arguments"]
-                                )
-
-                # 处理普通内容（只有在没有工具调用时才流式输出）
-                content = delta.get("content", "")
-                if content and not tool_calls_dict:
-                    full_response += content
-                    yield f"data: {json.dumps({'content': content})}\n\n"
-
-        # 如果有工具调用，执行工具并让AI基于结果继续生成
-        if tool_calls_dict:
-            # 按index排序处理所有工具调用
-            sorted_indexes = sorted(tool_calls_dict.keys())
-            all_tool_results = []
-            all_tool_calls = []
-
-            for tc_index in sorted_indexes:
-                tc = tool_calls_dict[tc_index]
-                tool_name = tc["function"].get("name", "")
-                tool_call_id = tc.get("id", "")
-                tool_args_str = tc["function"].get("arguments", "")
-
-                # 解析工具参数
-                try:
-                    tool_args_dict = json.loads(tool_args_str) if tool_args_str else {}
-                except json.JSONDecodeError:
-                    tool_args_dict = {}
-
-                # 执行工具
-                tool_result = tool_executor.execute(
-                    tool_name, tool_args_dict, workspace
-                )
-                all_tool_results.append(
-                    {"id": tool_call_id, "name": tool_name, "result": tool_result}
-                )
-                all_tool_calls.append(
-                    {
-                        "id": tool_call_id,
-                        "type": "function",
-                        "function": {"name": tool_name, "arguments": tool_args_str},
-                    }
-                )
-
-                # 发送工具执行结果给前端
-                yield f"data: {json.dumps({'tool_call': {'name': tool_name, 'status': 'completed', 'result': tool_result}})}\n\n"
-
-                # 如果工具是generate_exercise，发送练习题数据
-                if tool_name == "generate_exercise" and "exercise" in tool_result:
-                    yield f"data: {json.dumps({'exercise': tool_result['exercise']})}\n\n"
-
-            # 构建包含工具结果的消息历史
-            messages_with_tool: List[Dict[str, Any]] = messages.copy()  # type: ignore
-            messages_with_tool.append(
-                {
-                    "role": "assistant",
-                    "content": full_response if full_response else "",
-                    "tool_calls": all_tool_calls,
-                }
-            )
-
-            # 添加所有工具结果
-            for tool_info in all_tool_results:
-                messages_with_tool.append(
-                    {
-                        "role": "tool",
-                        "content": json.dumps(tool_info["result"], ensure_ascii=False),
-                        "tool_call_id": tool_info["id"],
-                    }
-                )
-
-            # 第二次调用：让AI基于工具结果继续生成回复
-            follow_up_response = ""
+            # 调用LLM获取回复
             for chunk in llm_service.chat_completion(
-                messages_with_tool, stream=True, tools=tools
+                current_messages, stream=True, tools=tools
             ):
                 if not chunk.startswith("data: "):
                     continue
@@ -1582,7 +1464,141 @@ def teaching_chat(workspace_id):
                     continue
 
                 if "error" in data:
-                    logger.error(f"LLM二次调用错误: {data['error']}")
+                    yield f"data: {json.dumps({'error': data['error']})}\n\n"
+                    return
+
+                if "choices" in data and len(data["choices"]) > 0:
+                    choice = data["choices"][0]
+                    delta = choice.get("delta", {})
+
+                    # 处理工具调用
+                    if "tool_calls" in delta:
+                        for tc in delta["tool_calls"]:
+                            tc_index = tc.get("index", 0)
+
+                            if tc_index not in tool_calls_dict:
+                                tool_calls_dict[tc_index] = {
+                                    "index": tc_index,
+                                    "function": {},
+                                }
+
+                            if "id" in tc:
+                                tool_calls_dict[tc_index]["id"] = tc["id"]
+                            if "type" in tc:
+                                tool_calls_dict[tc_index]["type"] = tc["type"]
+                            if "function" in tc:
+                                func = tc["function"]
+                                if "name" in func:
+                                    tool_calls_dict[tc_index]["function"]["name"] = (
+                                        func["name"]
+                                    )
+                                    tool_name = func["name"]
+                                    yield f"data: {json.dumps({'tool_call': {'name': tool_name, 'status': 'started'}})}\n\n"
+                                if "arguments" in func:
+                                    if (
+                                        "arguments"
+                                        not in tool_calls_dict[tc_index]["function"]
+                                    ):
+                                        tool_calls_dict[tc_index]["function"][
+                                            "arguments"
+                                        ] = ""
+                                    tool_calls_dict[tc_index]["function"][
+                                        "arguments"
+                                    ] += func["arguments"]
+
+                    # 只在第一次迭代且没有工具调用时流式输出内容
+                    content = delta.get("content", "")
+                    if content and iteration == 1 and not tool_calls_dict:
+                        full_response += content
+                        yield f"data: {json.dumps({'content': content})}\n\n"
+
+            # 如果没有工具调用，结束循环
+            if not tool_calls_dict:
+                break
+
+            # 执行所有工具调用
+            sorted_indexes = sorted(tool_calls_dict.keys())
+            iteration_tool_calls = []
+            iteration_tool_results = []
+
+            for tc_index in sorted_indexes:
+                tc = tool_calls_dict[tc_index]
+                tool_name = tc["function"].get("name", "")
+                tool_call_id = tc.get("id", f"call_{iteration}_{tc_index}")
+                tool_args_str = tc["function"].get("arguments", "")
+
+                try:
+                    tool_args_dict = json.loads(tool_args_str) if tool_args_str else {}
+                except json.JSONDecodeError:
+                    tool_args_dict = {}
+
+                # 执行工具
+                tool_result = tool_executor.execute(
+                    tool_name, tool_args_dict, workspace
+                )
+                iteration_tool_results.append(
+                    {"id": tool_call_id, "name": tool_name, "result": tool_result}
+                )
+                iteration_tool_calls.append(
+                    {
+                        "id": tool_call_id,
+                        "type": "function",
+                        "function": {"name": tool_name, "arguments": tool_args_str},
+                    }
+                )
+
+                # 发送工具执行结果
+                yield f"data: {json.dumps({'tool_call': {'name': tool_name, 'status': 'completed', 'result': tool_result}})}\n\n"
+
+                # 如果工具是generate_exercise，发送练习题数据
+                if tool_name == "generate_exercise" and "exercise" in tool_result:
+                    yield f"data: {json.dumps({'exercise': tool_result['exercise']})}\n\n"
+
+            # 保存到总列表
+            all_tool_calls.extend(iteration_tool_calls)
+            all_tool_results.extend(iteration_tool_results)
+
+            # 更新消息列表，添加助手的工具调用和工具结果
+            current_messages.append(
+                {
+                    "role": "assistant",
+                    "content": full_response if iteration == 1 else "",
+                    "tool_calls": iteration_tool_calls,
+                }
+            )
+
+            for tool_info in iteration_tool_results:
+                current_messages.append(
+                    {
+                        "role": "tool",
+                        "content": json.dumps(tool_info["result"], ensure_ascii=False),
+                        "tool_call_id": tool_info["id"],
+                    }
+                )
+
+            # 重置full_response，用于下一次迭代
+            full_response = ""
+
+        # 如果进行了工具调用，流式输出最后一次AI回复
+        if all_tool_calls:
+            follow_up_response = ""
+            for chunk in llm_service.chat_completion(
+                current_messages, stream=True, tools=None
+            ):
+                if not chunk.startswith("data: "):
+                    continue
+
+                data_str = chunk[6:]
+                if data_str == "[DONE]":
+                    break
+
+                try:
+                    data = json.loads(data_str)
+                except:
+                    continue
+
+                if "error" in data:
+                    logger.error(f"LLM后续调用错误: {data['error']}")
                     break
 
                 if "choices" in data and len(data["choices"]) > 0:
@@ -1595,15 +1611,13 @@ def teaching_chat(workspace_id):
 
             # 保存完整对话历史
             workspace.messages.append({"role": "user", "content": user_input})
-            # 保存tool_calls为数组格式（List[Dict[str, Any]]支持）
             workspace.messages.append(
                 {
                     "role": "assistant",
-                    "content": follow_up_response or full_response,
+                    "content": follow_up_response,
                     "tool_calls": all_tool_calls,
                 }
             )
-            # 添加所有工具结果到消息历史
             for tool_info in all_tool_results:
                 workspace.messages.append(
                     {
