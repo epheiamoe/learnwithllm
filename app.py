@@ -13,6 +13,7 @@ import yaml
 import time
 import re
 import logging
+import urllib.parse
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Generator, Tuple
@@ -327,6 +328,8 @@ class WorkspaceManager:
                 for file in files:
                     file_path = os.path.join(root, file)
                     rel_file_path = os.path.relpath(file_path, workspace.path)
+                    # 统一使用正斜杠作为路径分隔符（跨平台兼容）
+                    rel_file_path = rel_file_path.replace("\\", "/")
                     file_tree.append(
                         {
                             "name": file,
@@ -515,7 +518,7 @@ class ToolExecutor:
         """Jina AI搜索"""
         headers = {"Authorization": f"Bearer {api_key}"}
         response = requests.get(
-            f"https://s.jina.ai/http://{requests.utils.quote(query)}",
+            f"https://s.jina.ai/http://{urllib.parse.quote(query)}",
             headers=headers,
             timeout=30,
         )
@@ -911,8 +914,10 @@ Token使用情况：{token_count} / {token_threshold}
 3. **注重实践**：理论结合实践，及时练习
 
 ## 工具使用规范
-需要调用工具时，使用标准格式：
-<tool_call>{"name": "工具名称", "parameters": {参数}}</tool_call>
+你有以下工具可用：
+{available_tools}
+
+当需要调用工具时，系统会自动解析。你**无需**在回复中手动写出工具调用格式，只需正常对话，AI会在需要时自动调用工具。调用工具后，系统会返回结果，你需要根据结果继续对话。
 
 ## 上下文管理
 [STUDY_PLAN]
@@ -1292,6 +1297,16 @@ def teaching_chat(workspace_id):
     file_tree = workspace_manager.get_file_tree(workspace_id)
     file_tree_str = "\n".join([f["path"] for f in file_tree[:20]])  # 限制数量
 
+    # 检查搜索配置
+    search_config = config_manager.get_search_config()
+    search_enabled = bool(search_config.get("provider", "").strip())
+
+    # 构建可用工具列表描述
+    available_tools = """- generate_exercise: 生成练习题
+- file_system: 读写工作区文件"""
+    if search_enabled:
+        available_tools += "\n- web_search: 搜索网络信息"
+
     # 使用提示词管理器构建系统提示词
     max_context = config_manager.get_model_max_context(llm_service.model) // 1000
     system_prompt = prompt_manager.get_teaching_prompt(
@@ -1303,6 +1318,7 @@ def teaching_chat(workspace_id):
         lesson_context=lesson_context,
         recent_exchanges=recent_exchanges,
         file_tree=file_tree_str,
+        available_tools=available_tools,
     )
 
     # 构建消息列表
@@ -1380,28 +1396,6 @@ def teaching_chat(workspace_id):
         {
             "type": "function",
             "function": {
-                "name": "web_search",
-                "description": "Search the web for information. After calling this tool, you MUST summarize the search results and continue the conversation.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The search query. Must be specific and clear.",
-                        },
-                        "max_results": {
-                            "type": "integer",
-                            "default": 5,
-                            "description": "Maximum number of results to return (1-10)",
-                        },
-                    },
-                    "required": ["query"],
-                },
-            },
-        },
-        {
-            "type": "function",
-            "function": {
                 "name": "file_system",
                 "description": "Read, write, edit, delete files or create directories in the workspace. After calling this tool, you MUST tell the user what you did with the file.",
                 "parameters": {
@@ -1430,6 +1424,33 @@ def teaching_chat(workspace_id):
             },
         },
     ]
+
+    # 如果搜索功能已配置，添加web_search工具
+    if search_enabled:
+        tools.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": "web_search",
+                    "description": "Search the web for information. After calling this tool, you MUST summarize the search results and continue the conversation.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The search query. Must be specific and clear.",
+                            },
+                            "max_results": {
+                                "type": "integer",
+                                "default": 5,
+                                "description": "Maximum number of results to return (1-10)",
+                            },
+                        },
+                        "required": ["query"],
+                    },
+                },
+            }
+        )
 
     def generate():
         full_response = ""
