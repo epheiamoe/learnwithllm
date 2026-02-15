@@ -586,9 +586,10 @@ async function sendInquiryMessage(message) {
                             const result = data.tool_call.result;
 
                             if (toolName === 'end_inquiry') {
+                                // 对于end_inquiry工具，只更新状态，不显示工具调用消息
+                                // 真正的完成信号会在data.inquiry_complete中处理
                                 showToolStatus('AI已收集足够信息，正在生成学习计划...', true);
                                 inquiryComplete = true;
-                                showToolCallInChat(toolName, 'inquiry_complete');
                             } else {
                                 showToolCallInChat(toolName, status, result);
                             }
@@ -599,12 +600,17 @@ async function sendInquiryMessage(message) {
                             console.log('收到inquiry_complete信号，summary:', data.summary);
                             inquiryComplete = true;
                             showNotification('AI已收集足够信息，正在生成学习计划...', 'success');
+                            // 只在这里显示一次工具调用完成消息
                             showToolCallInChat('end_inquiry', 'inquiry_complete', {summary: data.summary || 'AI已收集足够信息'});
                         }
 
                         if (data.done) {
                             console.log('收到done信号，inquiryComplete:', inquiryComplete, 'fullResponse长度:', fullResponse.length);
-                            inquiryHistory.push({ role: 'assistant', content: fullResponse });
+
+                            // 只有当有实际内容时才添加到历史
+                            if (fullResponse.trim()) {
+                                inquiryHistory.push({ role: 'assistant', content: fullResponse });
+                            }
 
                             // 如果询问完成，自动生成学习计划
                             if (inquiryComplete) {

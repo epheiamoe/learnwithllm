@@ -994,8 +994,8 @@ def inquiry_chat(workspace_id):
                         tool_calls_buffer.append(tc)
                         if 'function' in tc and 'name' in tc['function']:
                             tool_name = tc['function']['name']
-                            if tool_name == 'end_inquiry':
-                                yield f"data: {json.dumps({'tool_call': {'name': tool_name, 'status': 'inquiry_complete'}})}\n\n"
+                            # 只发送工具开始状态，不发送inquiry_complete状态
+                            yield f"data: {json.dumps({'tool_call': {'name': tool_name, 'status': 'started'}})}\n\n"
 
                 # 处理普通内容
                 content = delta.get('content', '')
