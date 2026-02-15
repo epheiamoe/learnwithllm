@@ -345,8 +345,29 @@ class ToolExecutor:
     
     def _generate_exercise(self, params: Dict[str, Any], workspace: Workspace) -> Dict[str, Any]:
         """生成练习题"""
+        # 检查必要参数
+        if not params.get('question'):
+            return {'error': '题目内容不能为空', 'hint': '请提供完整的题目内容，包括question、type等参数'}
+
+        exercise_type = params.get('type', 'choice')
+
+        # 根据题目类型验证必要参数
+        if exercise_type == 'choice':
+            options = params.get('options', [])
+            if len(options) < 2:
+                return {'error': '选择题必须提供至少2个选项', 'hint': '请提供完整的选项数组'}
+            if not params.get('correct_answers'):
+                return {'error': '选择题必须提供正确答案', 'hint': '请提供correct_answers参数'}
+
+        elif exercise_type == 'fill_blank':
+            blanks = params.get('blanks', [])
+            if not blanks:
+                return {'error': '填空题必须提供空白位置', 'hint': '请提供blanks参数'}
+            if not params.get('correct_answers'):
+                return {'error': '填空题必须提供正确答案', 'hint': '请提供correct_answers参数'}
+
         exercise = {
-            'type': params.get('type', 'choice'),
+            'type': exercise_type,
             'question': params.get('question', ''),
             'options': params.get('options', []),
             'blanks': params.get('blanks', []),
@@ -355,11 +376,11 @@ class ToolExecutor:
             'difficulty': params.get('difficulty', 'medium'),
             'created_at': datetime.now().isoformat()
         }
-        
+
         # 保存到工作区
         exercise_id = f"ex_{int(time.time())}"
         exercise_path = os.path.join(workspace.path, 'exercises', f"{exercise_id}.json")
-        
+
         try:
             with open(exercise_path, 'w', encoding='utf-8') as f:
                 json.dump(exercise, f, ensure_ascii=False, indent=2)
@@ -966,14 +987,25 @@ def inquiry_chat(workspace_id):
             for tc in tool_calls_buffer:
                 if 'function' in tc and tc['function']['name'] == 'end_inquiry':
                     # 执行end_inquiry工具
-                    params = tc['function'].get('arguments', '{}')
+                    params_str = tc['function'].get('arguments', '{}')
                     try:
-                        params_dict = json.loads(params)
+                        # 处理可能的空参数
+                        if not params_str or params_str.strip() == '':
+                            params_dict = {}
+                        else:
+                            params_dict = json.loads(params_str)
+
                         result = tool_executor.execute('end_inquiry', params_dict, workspace)
                         if result.get('inquiry_complete'):
                             yield f"data: {json.dumps({'inquiry_complete': True, 'summary': result.get('summary', '')})}\n\n"
+                    except json.JSONDecodeError as e:
+                        logger.error(f"解析end_inquiry参数失败: {str(e)}, params: {params_str}")
+                        # 即使解析失败，也标记询问完成
+                        yield f"data: {json.dumps({'inquiry_complete': True, 'summary': 'AI已收集足够信息'})}\n\n"
                     except Exception as e:
                         logger.error(f"执行end_inquiry工具失败: {str(e)}")
+                        # 即使执行失败，也标记询问完成
+                        yield f"data: {json.dumps({'inquiry_complete': True, 'summary': 'AI已收集足够信息'})}\n\n"
 
         yield f"data: {json.dumps({'done': True, 'full_response': full_response})}\n\n"
         yield "data: [DONE]\n\n"

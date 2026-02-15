@@ -572,7 +572,10 @@ async function sendInquiryMessage(message) {
                         if (data.content) {
                             fullResponse += data.content;
                             responseDiv.innerHTML = formatMessage(fullResponse);
-                            scrollToBottom();
+                            // 只在消息开始时滚动一次
+                            if (fullResponse.length <= data.content.length) {
+                                scrollToBottom();
+                            }
                         }
 
                         // 处理工具调用
@@ -711,7 +714,10 @@ async function sendTeachingMessage(message) {
                         if (data.content) {
                             fullResponse += data.content;
                             responseDiv.innerHTML = formatMessage(fullResponse);
-                            scrollToBottom();
+                            // 只在消息开始时滚动一次
+                            if (fullResponse.length <= data.content.length) {
+                                scrollToBottom();
+                            }
                         }
                         
                         if (data.tool_call) {
@@ -1052,7 +1058,10 @@ function appendMessage(role, content, isStreaming = false) {
     `;
     
     container.appendChild(messageDiv);
-    scrollToBottom();
+    // 只在用户发送消息时滚动，AI回复由流式响应处理
+    if (role === 'user') {
+        scrollToBottom();
+    }
     
     if (isStreaming) {
         return messageDiv.querySelector('.message-content');
