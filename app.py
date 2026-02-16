@@ -89,6 +89,59 @@ def token_required(f):
     return decorated_function
 
 
+def clean_content(content: str) -> str:
+    """
+    清理内容中的DSML格式残留
+    
+    DeepSeek模型有时会输出类似以下的格式：
+    <｜DSML｜function_calls>
+    <｜DSML｜invoke name="xxx">...</｜DSML｜invoke>
+    </｜DSML｜function_calls>
+    <function_results>...</function_results>
+    
+    这些残留需要被过滤掉，因为工具调用应该通过OpenAI标准的tool_calls机制处理
+    
+    Args:
+        content: 原始内容
+        
+    Returns:
+        清理后的内容
+    """
+    if not content:
+        return content
+    
+    # 定义需要过滤的模式（按优先级排序）
+    patterns = [
+        # DSML function_calls 块（包括内容）
+        r'<｜DSML｜function_calls>.*?</｜DSML｜function_calls>',
+        # DSML 结束标签（如果开始标签缺失）
+        r'</｜DSML｜function_calls>',
+        # function_results 块
+        r'<function_results>.*?</function_results>',
+        # function_results 结束标签（如果开始标签缺失）
+        r'</function_results>',
+        # 单独的DSML invoke标签
+        r'<｜DSML｜invoke[^>]*>.*?</｜DSML｜invoke>',
+        # 单独的DSML parameter标签
+        r'<｜DSML｜parameter[^/]*/>',
+        # 工具调用结果标签
+        r'<result>.*?</result>',
+        r'</result>',
+    ]
+    
+    cleaned = content
+    for pattern in patterns:
+        cleaned = re.sub(pattern, '', cleaned, flags=re.DOTALL)
+    
+    # 清理多余的空行（保留最多两个连续换行）
+    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+    
+    # 去除首尾空白
+    cleaned = cleaned.strip()
+    
+    return cleaned
+
+
 # ==================== 数据模型 ====================
 
 
@@ -1700,7 +1753,7 @@ def teaching_chat(workspace_id):
             workspace.messages.append(
                 {
                     "role": "assistant",
-                    "content": follow_up_response,
+                    "content": clean_content(follow_up_response),
                     "tool_calls": all_tool_calls,
                 }
             )
@@ -1715,7 +1768,7 @@ def teaching_chat(workspace_id):
         else:
             # 没有工具调用，正常保存消息
             workspace.messages.append({"role": "user", "content": user_input})
-            workspace.messages.append({"role": "assistant", "content": full_response})
+            workspace.messages.append({"role": "assistant", "content": clean_content(full_response)})
 
         # 更新token计数（估算）
         workspace.token_count = sum(len(m["content"]) // 4 for m in workspace.messages)

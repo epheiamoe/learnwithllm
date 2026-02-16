@@ -108,6 +108,14 @@ ai-learning-assistant/
 - 模型只需正常对话表达意图，系统会自动处理工具调用
 - 工具执行结果不保存到对话历史
 
+#### DSML格式过滤（重要！）
+
+DeepSeek模型有时会输出 `<｜DSML｜function_calls>` 格式，这是其原生训练格式。为了防止这种格式污染对话历史：
+
+- 后端使用 `clean_content()` 函数（app.py:92）自动过滤所有 DSML 标签
+- 在保存消息前会自动清理内容中的 `<｜DSML｜...>`、`<function_results>` 等残留
+- 如需添加新的过滤模式，修改 `clean_content()` 函数中的 `patterns` 列表
+
 ## 修改指南
 
 ### 添加新工具
