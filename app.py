@@ -271,6 +271,68 @@ class WorkspaceManager:
         logger.info(f"创建工作区: {workspace_id}")
         return workspace
 
+    def _sanitize_messages(
+        self, messages: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """清理异常的消息历史
+        
+        检测并删除不完整的对话记录，确保：
+        1. 消息以 user 消息开始（如果是空的，则保持空）
+        2. 消息以 assistant 或 tool 结束
+        3. 没有孤立的 tool 消息（必须有对应的 assistant tool_calls）
+        
+        Args:
+            messages: 原始消息列表
+            
+        Returns:
+            清理后的消息列表
+        """
+        if not messages:
+            return messages
+        
+        original_count = len(messages)
+        sanitized = list(messages)  # 复制一份
+        
+        # 规则1: 如果最后一条是 user 消息，说明 assistant 没回复完，删除它
+        while sanitized and sanitized[-1].get("role") == "user":
+            logger.warning(f"删除未完成的 user 消息: {sanitized[-1].get('content', '')[:50]}...")
+            sanitized.pop()
+        
+        # 规则2: 如果最后一条是 assistant 但没有 tool_calls，
+        # 且前一条是 tool，说明 tool 结果没有处理完，删除 tool 和 assistant
+        while sanitized:
+            last_msg = sanitized[-1]
+            if last_msg.get("role") == "assistant" and not last_msg.get("tool_calls"):
+                # 检查前一条是否是 tool
+                if len(sanitized) >= 2 and sanitized[-2].get("role") == "tool":
+                    logger.warning("删除未处理的 tool 消息和对应的 assistant 消息")
+                    sanitized.pop()  # 删除 assistant
+                    sanitized.pop()  # 删除 tool
+                    continue
+            break
+        
+        # 规则3: 清理孤立的 tool 消息（没有对应 assistant tool_calls 的）
+        valid_tool_ids = set()
+        for msg in sanitized:
+            if msg.get("role") == "assistant" and msg.get("tool_calls"):
+                for tc in msg["tool_calls"]:
+                    valid_tool_ids.add(tc.get("id"))
+        
+        i = 0
+        while i < len(sanitized):
+            if sanitized[i].get("role") == "tool":
+                tool_call_id = sanitized[i].get("tool_call_id")
+                if tool_call_id not in valid_tool_ids:
+                    logger.warning(f"删除孤立的 tool 消息: {tool_call_id}")
+                    sanitized.pop(i)
+                    continue
+            i += 1
+        
+        if len(sanitized) != original_count:
+            logger.info(f"消息历史已清理: {original_count} -> {len(sanitized)} 条消息")
+        
+        return sanitized
+
     def get_workspace(self, workspace_id: str) -> Optional[Workspace]:
         """获取工作区"""
         if workspace_id in self.active_workspaces:
@@ -321,6 +383,7 @@ class WorkspaceManager:
             )
             compressed_context = ""
 
+            last_wait_call_id = None
             if os.path.exists(state_path):
                 try:
                     with open(state_path, "r", encoding="utf-8") as f:
@@ -329,8 +392,12 @@ class WorkspaceManager:
                         token_count = state.get("token_count", 0)
                         token_threshold = state.get("token_threshold", token_threshold)
                         compressed_context = state.get("compressed_context", "")
+                        last_wait_call_id = state.get("last_wait_call_id")
                 except Exception as e:
                     logger.error(f"加载工作区状态失败: {str(e)}")
+
+            # 清理异常的消息历史（确保以 user 消息开始，以 assistant 消息结束）
+            messages = self._sanitize_messages(messages)
 
             workspace = Workspace(
                 id=workspace_id,
@@ -342,6 +409,7 @@ class WorkspaceManager:
                 token_count=token_count,
                 token_threshold=token_threshold,
                 compressed_context=compressed_context,
+                last_wait_call_id=last_wait_call_id,
             )
 
             logger.info(f"从磁盘加载工作区: {workspace_id}")
@@ -399,6 +467,7 @@ class WorkspaceManager:
                 "token_count": workspace.token_count,
                 "token_threshold": workspace.token_threshold,
                 "compressed_context": workspace.compressed_context,
+                "last_wait_call_id": workspace.last_wait_call_id,
             }
             with open(state_path, "w", encoding="utf-8") as f:
                 json.dump(state, f, ensure_ascii=False, indent=2)
