@@ -5,7 +5,7 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
-## [1.6.0] - 2026-02-16
+## [1.6.0] - 2026-02-17
 
 ### 新增
 
@@ -17,9 +17,21 @@
 
 ### 已修复
 
+- **[严重问题] 退出对话后实际上未完整保留工作区的问题：** 之前的版本中，实际上保存的工作区是不完整的，之前的问题代码是：
+
+```python
+if content and iteration == 1 and not tool_calls_dict:  # 这导致调用工具时不收集内容
+    full_response += content
+```
+
+- 
+
 - **AI连续调用 `wait_user_answer` 问题**：修复了因工具执行后返回结果导致AI误以为用户已回复，从而无限循环调用同一工具的逻辑错误。现在检测到 `wait_user_answer` 后，立即结束本轮对话，不再继续调用LLM。
+
 - **前端工具调用转圈后消失问题**：针对 `wait_user_answer` 特殊处理，不再显示加载状态条，只显示完成状态，避免转圈后突然消失造成的困惑。
+
 - **答题反馈丢失问题**：修复了因 `last_wait_call_id` 未持久化导致的答题反馈无法正确匹配上一轮工具调用的问题。
+
 - **异常退出导致对话记录损坏**：通过 `_sanitize_messages` 自动清理，确保重新进入工作区时对话历史完整可用。
 
 ### 变更
