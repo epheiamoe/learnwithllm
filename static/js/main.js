@@ -3,6 +3,47 @@
  * 包含全局工具函数和共享功能
  */
 
+// Token管理器
+const TokenManager = {
+    token: null,
+    
+    init() {
+        // 从URL参数获取token
+        const urlParams = new URLSearchParams(window.location.search);
+        this.token = urlParams.get('token');
+        
+        // 如果URL中有token，保存到sessionStorage
+        if (this.token) {
+            sessionStorage.setItem('access_token', this.token);
+            // 移除URL中的token参数（安全考虑）
+            this.cleanUrl();
+        } else {
+            // 从sessionStorage获取
+            this.token = sessionStorage.getItem('access_token');
+        }
+    },
+    
+    get() {
+        return this.token;
+    },
+    
+    // 构建带token的URL
+    buildUrl(url) {
+        if (!this.token) return url;
+        const separator = url.includes('?') ? '&' : '?';
+        return `${url}${separator}token=${this.token}`;
+    },
+    
+    // 清理URL中的token参数
+    cleanUrl() {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('token')) {
+            url.searchParams.delete('token');
+            window.history.replaceState({}, '', url.toString());
+        }
+    }
+};
+
 // 主题管理
 const ThemeManager = {
     init() {
@@ -125,6 +166,9 @@ const API = {
     baseUrl: '',
     
     async request(url, options = {}) {
+        // 自动添加token到URL
+        const urlWithToken = TokenManager.buildUrl(url);
+        
         const defaultOptions = {
             headers: {
                 'Content-Type': 'application/json'
@@ -145,9 +189,13 @@ const API = {
         }
         
         try {
-            const response = await fetch(this.baseUrl + url, mergedOptions);
+            const response = await fetch(this.baseUrl + urlWithToken, mergedOptions);
             
             if (!response.ok) {
+                if (response.status === 401) {
+                    NotificationManager.error('访问令牌无效或已过期，请重新访问应用');
+                    throw new Error('未授权访问');
+                }
                 const errorData = await response.json().catch(() => ({}));
                 throw new Error(errorData.error || `HTTP ${response.status}`);
             }
@@ -175,13 +223,21 @@ const API = {
 // 流式请求工具
 const StreamingAPI = {
     async* stream(url, options = {}) {
-        const response = await fetch(url, {
+        // 自动添加token到URL
+        const urlWithToken = TokenManager.buildUrl(url);
+        
+        const response = await fetch(urlWithToken, {
             ...options,
             headers: {
                 'Content-Type': 'application/json',
                 ...options.headers
             }
         });
+        
+        if (response.status === 401) {
+            NotificationManager.error('访问令牌无效或已过期，请重新访问应用');
+            throw new Error('未授权访问');
+        }
         
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -426,6 +482,7 @@ function formatFileSize(bytes) {
 
 // 初始化
 document.addEventListener('DOMContentLoaded', () => {
+    TokenManager.init();
     ThemeManager.init();
     NotificationManager.init();
     LoadingManager.init();
@@ -433,6 +490,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // 导出全局函数
+window.TokenManager = TokenManager;
 window.ThemeManager = ThemeManager;
 window.NotificationManager = NotificationManager;
 window.LoadingManager = LoadingManager;

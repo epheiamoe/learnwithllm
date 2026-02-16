@@ -198,7 +198,8 @@ async function startNewLearning() {
     btnLoading.classList.remove('hidden');
 
     try {
-        const response = await fetch('/api/workspaces', {
+        const url = TokenManager.buildUrl('/api/workspaces');
+        const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ theme })
@@ -208,8 +209,10 @@ async function startNewLearning() {
 
         if (data.success) {
             showNotification('学习空间创建成功', 'success');
-            // 跳转到询问阶段
-            window.location.href = `/chat/${data.workspace.id}?phase=inquiry`;
+            // 跳转到询问阶段，携带token
+            const token = TokenManager.get();
+            const tokenParam = token ? `?token=${token}` : '';
+            window.location.href = `/chat/${data.workspace.id}${tokenParam}`;
         } else {
             showNotification(data.error || '创建失败', 'error');
         }
@@ -229,7 +232,8 @@ async function loadWorkspaces() {
     const list = document.getElementById('workspacesList');
 
     try {
-        const response = await fetch('/api/workspaces');
+        const url = TokenManager.buildUrl('/api/workspaces');
+        const response = await fetch(url);
         const data = await response.json();
 
         if (data.success && data.workspaces.length > 0) {
@@ -270,7 +274,9 @@ function hideWorkspaces() {
 }
 
 function continueLearning(workspaceId) {
-    window.location.href = `/chat/${workspaceId}`;
+    const token = TokenManager.get();
+    const tokenParam = token ? `?token=${token}` : '';
+    window.location.href = `/chat/${workspaceId}${tokenParam}`;
 }
 
 // 工具函数

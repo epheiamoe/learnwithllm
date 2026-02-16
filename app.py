@@ -14,6 +14,8 @@ import time
 import re
 import logging
 import urllib.parse
+import secrets
+import webbrowser
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Generator, Tuple
@@ -28,6 +30,9 @@ from flask import (
     jsonify,
     Response,
     stream_with_context,
+    session,
+    redirect,
+    url_for,
 )
 import requests
 
@@ -48,6 +53,41 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.config["JSON_AS_ASCII"] = False
+app.config["SECRET_KEY"] = secrets.token_hex(32)
+
+# 生成6位数字PIN码（局域网环境使用，兼顾安全与易用性）
+ACCESS_TOKEN = "".join([str(secrets.randbelow(10)) for _ in range(6)])
+
+
+def token_required(f):
+    """Token验证装饰器"""
+
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # 允许静态文件访问
+        if request.path.startswith("/static/"):
+            return f(*args, **kwargs)
+
+        # 检查session中是否已认证
+        if session.get("authenticated"):
+            return f(*args, **kwargs)
+
+        # 检查URL参数中的token
+        token = request.args.get("token")
+        if token == ACCESS_TOKEN:
+            session["authenticated"] = True
+            session.permanent = True
+            return f(*args, **kwargs)
+
+        # 对于API请求返回401，对于页面请求重定向到首页
+        if request.is_json or request.path.startswith("/api/"):
+            return jsonify(
+                {"success": False, "error": "未授权访问，请提供有效token"}
+            ), 401
+        return "未授权访问，请通过正确链接访问", 401
+
+    return decorated_function
+
 
 # ==================== 数据模型 ====================
 
@@ -913,11 +953,29 @@ Token使用情况：{token_count} / {token_threshold}
 2. **因材施教**：根据学生水平调整教学深度
 3. **注重实践**：理论结合实践，及时练习
 
-## 工具使用规范
+## 工具使用规范（重要）
+本系统使用 **OpenAI Function Calling** 标准机制。
+
+**关键规则**：
+1. **系统自动处理**：当你需要调用工具时，只需正常对话表达意图（如"让我为你生成一道题目"），系统会通过 API 自动处理工具调用
+2. **严禁手动格式**：**绝对禁止**在回复内容中手动写出任何工具调用格式，包括但不限于：
+   - XML 格式：`<tool_call>...`、`</tool_call>`
+   - DSML 格式：`<｜DSML｜invoke>`、`<｜DSML｜parameter>`
+   - JSON 格式：`{"name": "xxx", "parameters": ...}`
+3. **等待系统返回**：说要做某事后，等待系统返回工具执行结果，再根据结果继续对话
+
+**正确示例**：
+- 你说："让我为你生成一道练习题来检验理解"
+- 系统：自动调用 generate_exercise 工具
+- 系统：返回题目数据
+- 你说："好的，题目已生成。这道题目问的是..."
+
+**错误示例**：
+- 在回复中写 `<tool_call>{"name": "generate_exercise"...</tool_call>` ❌
+- 在回复中写 `<｜DSML｜invoke name="generate_exercise">...` ❌
+
 你有以下工具可用：
 {available_tools}
-
-当需要调用工具时，系统会自动解析。你**无需**在回复中手动写出工具调用格式，只需正常对话，AI会在需要时自动调用工具。调用工具后，系统会返回结果，你需要根据结果继续对话。
 
 ## 上下文管理
 [STUDY_PLAN]
@@ -980,12 +1038,14 @@ prompt_manager = PromptManager()
 
 
 @app.route("/")
+@token_required
 def index():
     """首页"""
     return render_template("index.html")
 
 
 @app.route("/chat/<workspace_id>")
+@token_required
 def chat(workspace_id):
     """聊天页面"""
     workspace = workspace_manager.get_workspace(workspace_id)
@@ -997,6 +1057,7 @@ def chat(workspace_id):
 
 
 @app.route("/api/workspaces", methods=["GET"])
+@token_required
 def list_workspaces():
     """列出所有工作区"""
     workspaces = workspace_manager.list_workspaces()
@@ -1004,6 +1065,7 @@ def list_workspaces():
 
 
 @app.route("/api/workspaces", methods=["POST"])
+@token_required
 def create_workspace():
     """创建工作区"""
     data = request.json
@@ -1052,6 +1114,7 @@ Created: {workspace.created_at}
 
 
 @app.route("/api/workspaces/<workspace_id>/inquiry", methods=["POST"])
+@token_required
 def inquiry_chat(workspace_id):
     """阶段一：启动询问（允许AI调用end_inquiry工具）"""
     workspace = workspace_manager.get_workspace(workspace_id)
@@ -1213,6 +1276,7 @@ def inquiry_chat(workspace_id):
 
 
 @app.route("/api/workspaces/<workspace_id>/plan", methods=["POST"])
+@token_required
 def generate_study_plan(workspace_id):
     """生成学习计划"""
     workspace = workspace_manager.get_workspace(workspace_id)
@@ -1255,6 +1319,7 @@ def generate_study_plan(workspace_id):
 
 
 @app.route("/api/workspaces/<workspace_id>/chat", methods=["POST"])
+@token_required
 def teaching_chat(workspace_id):
     """阶段二：正式教学"""
     workspace = workspace_manager.get_workspace(workspace_id)
@@ -1680,6 +1745,7 @@ def teaching_chat(workspace_id):
 
 
 @app.route("/api/workspaces/<workspace_id>/messages", methods=["GET"])
+@token_required
 def get_messages(workspace_id):
     """获取工作区消息历史"""
     workspace = workspace_manager.get_workspace(workspace_id)
@@ -1698,6 +1764,7 @@ def get_messages(workspace_id):
 
 
 @app.route("/api/workspaces/<workspace_id>/files", methods=["GET"])
+@token_required
 def get_files(workspace_id):
     """获取工作区文件列表"""
     workspace = workspace_manager.get_workspace(workspace_id)
@@ -1709,6 +1776,7 @@ def get_files(workspace_id):
 
 
 @app.route("/api/workspaces/<workspace_id>/files/<path:file_path>", methods=["GET"])
+@token_required
 def read_file(workspace_id, file_path):
     """读取工作区文件"""
     workspace = workspace_manager.get_workspace(workspace_id)
@@ -1728,6 +1796,7 @@ def read_file(workspace_id, file_path):
 
 
 @app.route("/api/workspaces/<workspace_id>/export", methods=["GET"])
+@token_required
 def export_conversation(workspace_id):
     """导出对话记录为JSON格式"""
     workspace = workspace_manager.get_workspace(workspace_id)
@@ -1770,6 +1839,7 @@ def export_conversation(workspace_id):
 
 
 @app.route("/api/tools/execute", methods=["POST"])
+@token_required
 def execute_tool():
     """执行工具"""
     data = request.json
@@ -1786,6 +1856,7 @@ def execute_tool():
 
 
 @app.route("/api/exercises/<workspace_id>/<exercise_id>", methods=["GET"])
+@token_required
 def get_exercise(workspace_id, exercise_id):
     """获取练习题"""
     workspace = workspace_manager.get_workspace(workspace_id)
@@ -1805,6 +1876,7 @@ def get_exercise(workspace_id, exercise_id):
 
 
 @app.route("/api/exercises/validate", methods=["POST"])
+@token_required
 def validate_exercise():
     """验证练习题答案"""
     data = request.json
@@ -1854,6 +1926,21 @@ def validate_exercise():
 
 # ==================== 主入口 ====================
 
+
+def get_local_ip():
+    """获取本地IP地址"""
+    import socket
+
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
+
 if __name__ == "__main__":
     # 检查配置文件
     if not os.path.exists(CONFIG_FILE):
@@ -1863,11 +1950,39 @@ if __name__ == "__main__":
         print("=" * 60)
         sys.exit(1)
 
-    print("=" * 60)
-    print("  AI Learning Assistant 启动中...")
-    print("=" * 60)
-    print(f"  访问地址: http://localhost:5000")
-    print(f"  工作区: {config_manager.get_workspace_root()}")
-    print("=" * 60)
+    local_ip = get_local_ip()
 
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    print("\n" + "=" * 70)
+    print("  " + " " * 20 + "AI Learning Assistant")
+    print("=" * 70)
+    print()
+    print(f"  本地访问: http://localhost:5000?token={ACCESS_TOKEN}")
+    print(f"  手机访问: http://{local_ip}:5000?token={ACCESS_TOKEN}")
+    print()
+    print("  " + "=" * 66)
+    print(f"  访问 PIN 码:  {ACCESS_TOKEN}")
+    print("  " + "=" * 66)
+    print()
+    print(f"  工作区目录: {config_manager.get_workspace_root()}")
+    print()
+    print("=" * 70)
+    print()
+
+    # 自动打开浏览器
+    url = f"http://localhost:5000?token={ACCESS_TOKEN}"
+    print(f"  正在自动打开浏览器...")
+    try:
+        # 使用非阻塞方式打开浏览器
+        def open_browser():
+            import time
+
+            time.sleep(1.5)  # 等待服务器启动
+            webbrowser.open(url)
+
+        browser_thread = threading.Thread(target=open_browser)
+        browser_thread.daemon = True
+        browser_thread.start()
+    except Exception as e:
+        logger.warning(f"自动打开浏览器失败: {e}")
+
+    app.run(host="0.0.0.0", port=5000, debug=False)

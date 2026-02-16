@@ -101,8 +101,11 @@ ai-learning-assistant/
 
 ### 工具调用
 
-- 工具通过`<tool_call>`标签调用
+- 工具使用 **OpenAI Function Calling** 标准机制
+- 工具通过 API 自动调用，**严禁在提示词中给出任何手动格式示例**（如 XML、DSML、JSON 格式）
+- 提示词只需说明工具功能和参数，不要给出"调用示例"
 - 工具定义只在正式教学阶段传入LLM
+- 模型只需正常对话表达意图，系统会自动处理工具调用
 - 工具执行结果不保存到对话历史
 
 ## 修改指南
@@ -116,8 +119,10 @@ ai-learning-assistant/
 
 ### 修改提示词
 
-- 询问阶段：修改`PHASE1_INQUIRY_PROMPT`（app.py第628行左右）
-- 教学阶段：修改`PHASE2_TEACHING_PROMPT`（app.py第645行左右）
+- 所有提示词统一在 `prompts.yml` 中配置
+- 询问阶段：修改 `phase1_inquiry.system`
+- 教学阶段：修改 `phase3_teaching.system`
+- **重要**：不要在提示词中给出任何工具调用的格式示例（如`工具: xxx`、`参数: xxx`等），系统使用 OpenAI Function Calling 自动处理
 
 ### 修改前端样式
 
