@@ -275,29 +275,85 @@ async function loadWorkspaceData() {
         const url = TokenManager.buildUrl(`/api/workspaces/${workspaceId}/messages`);
         const response = await fetch(url);
         const data = await response.json();
-        
+
         if (data.success) {
             currentPhase = data.phase;
             tokenCount = data.token_count;
             tokenThreshold = data.token_threshold;
-            
+
             updateContextIndicator();
             updatePhaseIndicator();
-            
+
             // 如果有历史消息，显示它们并初始化inquiryHistory
             if (data.messages && data.messages.length > 0) {
                 document.getElementById('welcomeMessage').style.display = 'none';
-                data.messages.forEach(msg => {
-                    if (msg.role !== 'system') {
-                        appendMessage(msg.role, msg.content);
+
+                // 处理消息，重建工具调用关系
+                const processedIndices = new Set();
+
+                data.messages.forEach((msg, index) => {
+                    if (processedIndices.has(index)) return;
+                    if (msg.role === 'system') return;
+
+                    // 跳过 tool 角色的消息（它们会在处理 assistant 消息时一并显示）
+                    if (msg.role === 'tool') return;
+
+                    if (msg.role === 'assistant') {
+                        // 显示AI的消息内容
+                        if (msg.content) {
+                            appendMessage('assistant', msg.content);
+                        }
+
+                        // 处理工具调用
+                        if (msg.tool_calls && msg.tool_calls.length > 0) {
+                            msg.tool_calls.forEach(toolCall => {
+                                // 找到对应的 tool 结果消息
+                                let toolResult = null;
+                                for (let i = index + 1; i < data.messages.length; i++) {
+                                    const nextMsg = data.messages[i];
+                                    if (nextMsg.role === 'tool' &&
+                                        nextMsg.tool_call_id === toolCall.id) {
+                                        try {
+                                            toolResult = JSON.parse(nextMsg.content);
+                                        } catch (e) {
+                                            toolResult = { success: true, message: nextMsg.content };
+                                        }
+                                        processedIndices.add(i);
+                                        break;
+                                    }
+                                }
+
+                                // 显示工具调用状态
+                                const toolName = toolCall.function?.name || toolCall.name;
+                                showToolCallInChat(toolName, 'completed', toolResult);
+
+                                // 如果是生成练习题工具，恢复练习题到侧边栏
+                                if (toolName === 'generate_exercise' && toolResult && toolResult.exercise) {
+                                    addExerciseToSidebar(toolResult.exercise);
+                                }
+                            });
+                        }
+
+                        // 添加到inquiryHistory（用于生成学习计划）
+                        if (currentPhase === 'inquiry' || currentPhase === 'init') {
+                            inquiryHistory.push({ role: msg.role, content: msg.content });
+                        }
+                    } else if (msg.role === 'user') {
+                        appendMessage('user', msg.content);
+
                         // 添加到inquiryHistory（用于生成学习计划）
                         if (currentPhase === 'inquiry' || currentPhase === 'init') {
                             inquiryHistory.push({ role: msg.role, content: msg.content });
                         }
                     }
+
+                    processedIndices.add(index);
                 });
             }
-            
+
+            // 从文件系统恢复练习题（补充消息历史中可能缺失的）
+            await loadExercisesFromFiles();
+
             // 根据阶段显示相应内容
             if (currentPhase === 'teaching') {
                 // 教学阶段：显示学习计划链接
@@ -310,6 +366,47 @@ async function loadWorkspaceData() {
         }
     } catch (error) {
         console.error('加载工作区数据失败:', error);
+    }
+}
+
+// 从文件系统加载练习题
+async function loadExercisesFromFiles() {
+    try {
+        // 获取文件列表
+        const url = TokenManager.buildUrl(`/api/workspaces/${workspaceId}/files`);
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (!data.success || !data.files) return;
+
+        // 筛选出 exercises 目录下的 json 文件
+        const exerciseFiles = data.files.filter(f =>
+            f.path.startsWith('exercises/') && f.path.endsWith('.json')
+        );
+
+        // 加载每个练习题文件
+        for (const file of exerciseFiles) {
+            try {
+                const exerciseUrl = TokenManager.buildUrl(`/api/workspaces/${workspaceId}/files/${encodeURIComponent(file.path)}`);
+                const exerciseResponse = await fetch(exerciseUrl);
+                const exerciseData = await exerciseResponse.json();
+
+                if (exerciseData.success && exerciseData.content) {
+                    const exercise = JSON.parse(exerciseData.content);
+                    // 添加到侧边栏（如果还没有添加）
+                    const existingExercise = exercises.find(ex =>
+                        ex.question === exercise.question && ex.type === exercise.type
+                    );
+                    if (!existingExercise) {
+                        addExerciseToSidebar(exercise);
+                    }
+                }
+            } catch (e) {
+                console.error('加载练习题文件失败:', file.path, e);
+            }
+        }
+    } catch (error) {
+        console.error('加载练习题列表失败:', error);
     }
 }
 

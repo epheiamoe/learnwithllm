@@ -1831,26 +1831,25 @@ def teaching_chat(workspace_id):
             # 如果调用了 wait_user_answer，这是本轮结束标记
             # 不再将 tool 结果加入 current_messages，避免 AI 立即继续
             if has_wait_tool:
-                # 保存 assistant 的 tool_call
+                # 保存 assistant 的 tool_call（使用 all_tool_calls 保存所有工具调用）
                 workspace.messages.append(
                     {
                         "role": "assistant",
                         "content": clean_content(full_response),
-                        "tool_calls": iteration_tool_calls,
+                        "tool_calls": all_tool_calls,
                     }
                 )
-                # 保存 tool 消息（占位，等待用户触发后更新）
-                for tool_info in iteration_tool_results:
-                    if tool_info["name"] == "wait_user_answer":
-                        workspace.messages.append(
-                            {
-                                "role": "tool",
-                                "content": json.dumps(
-                                    tool_info["result"], ensure_ascii=False
-                                ),
-                                "tool_call_id": tool_info["id"],
-                            }
-                        )
+                # 保存所有 tool 消息（包括练习题生成、文件操作等）
+                for tool_info in all_tool_results:
+                    workspace.messages.append(
+                        {
+                            "role": "tool",
+                            "content": json.dumps(
+                                tool_info["result"], ensure_ascii=False
+                            ),
+                            "tool_call_id": tool_info["id"],
+                        }
+                    )
                 # 本轮结束
                 break
 
@@ -1944,11 +1943,33 @@ def teaching_chat(workspace_id):
                     }
                 )
         else:
-            # 没有工具调用，正常保存消息
-            workspace.messages.append({"role": "user", "content": user_input})
-            workspace.messages.append(
-                {"role": "assistant", "content": clean_content(full_response)}
-            )
+            # 没有最终工具调用，但可能之前有工具调用（如AI调用了工具后又继续对话）
+            if all_tool_calls:
+                # 保存带有工具调用的消息
+                workspace.messages.append({"role": "user", "content": user_input})
+                workspace.messages.append(
+                    {
+                        "role": "assistant",
+                        "content": clean_content(full_response),
+                        "tool_calls": all_tool_calls,
+                    }
+                )
+                for tool_info in all_tool_results:
+                    workspace.messages.append(
+                        {
+                            "role": "tool",
+                            "content": json.dumps(
+                                tool_info["result"], ensure_ascii=False
+                            ),
+                            "tool_call_id": tool_info["id"],
+                        }
+                    )
+            else:
+                # 确实没有工具调用，正常保存消息
+                workspace.messages.append({"role": "user", "content": user_input})
+                workspace.messages.append(
+                    {"role": "assistant", "content": clean_content(full_response)}
+                )
 
         # 更新token计数（估算）
         workspace.token_count = sum(len(m["content"]) // 4 for m in workspace.messages)
