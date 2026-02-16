@@ -1714,6 +1714,7 @@ def teaching_chat(workspace_id):
             sorted_indexes = sorted(tool_calls_dict.keys())
             iteration_tool_calls = []
             iteration_tool_results = []
+            has_wait_tool = False
 
             for tc_index in sorted_indexes:
                 tc = tool_calls_dict[tc_index]
@@ -1721,15 +1722,28 @@ def teaching_chat(workspace_id):
                 tool_call_id = tc.get("id", f"call_{iteration}_{tc_index}")
                 tool_args_str = tc["function"].get("arguments", "")
 
-                try:
-                    tool_args_dict = json.loads(tool_args_str) if tool_args_str else {}
-                except json.JSONDecodeError:
-                    tool_args_dict = {}
+                # 检测是否是 wait_user_answer 工具
+                if tool_name == "wait_user_answer":
+                    has_wait_tool = True
+                    # 对于 wait_user_answer，不真正执行，只记录 call_id
+                    workspace.last_wait_call_id = tool_call_id
+                    tool_result = {"status": "waiting", "message": "等待用户输入"}
+                    logger.info(f"AI 调用 wait_user_answer，记录 call_id: {tool_call_id}")
+                else:
+                    try:
+                        tool_args_dict = json.loads(tool_args_str) if tool_args_str else {}
+                    except json.JSONDecodeError:
+                        tool_args_dict = {}
 
-                # 执行工具
-                tool_result = tool_executor.execute(
-                    tool_name, tool_args_dict, workspace
-                )
+                    # 执行普通工具
+                    tool_result = tool_executor.execute(
+                        tool_name, tool_args_dict, workspace
+                    )
+                    
+                    # 如果工具是generate_exercise，发送练习题数据
+                    if tool_name == "generate_exercise" and "exercise" in tool_result:
+                        yield f"data: {json.dumps({'exercise': tool_result['exercise']})}\n\n"
+
                 iteration_tool_results.append(
                     {"id": tool_call_id, "name": tool_name, "result": tool_result}
                 )
@@ -1741,18 +1755,28 @@ def teaching_chat(workspace_id):
                     }
                 )
 
-                # 发送工具执行结果
+                # 发送工具执行结果（wait_user_answer 也发送，但标记为 waiting 状态）
                 yield f"data: {json.dumps({'tool_call': {'name': tool_name, 'status': 'completed', 'result': tool_result}})}\n\n"
-
-                # 如果工具是generate_exercise，发送练习题数据
-                if tool_name == "generate_exercise" and "exercise" in tool_result:
-                    yield f"data: {json.dumps({'exercise': tool_result['exercise']})}\n\n"
 
             # 保存到总列表
             all_tool_calls.extend(iteration_tool_calls)
             all_tool_results.extend(iteration_tool_results)
 
-            # 更新消息列表，添加助手的工具调用和工具结果
+            # 如果调用了 wait_user_answer，这是本轮结束标记
+            # 不再将 tool 结果加入 current_messages，避免 AI 立即继续
+            if has_wait_tool:
+                # 保存 assistant 的 tool_call，但不保存 tool 结果（等待用户触发）
+                workspace.messages.append(
+                    {
+                        "role": "assistant",
+                        "content": clean_content(full_response),
+                        "tool_calls": iteration_tool_calls,
+                    }
+                )
+                # 本轮结束
+                break
+
+            # 更新消息列表，添加助手的工具调用和工具结果（普通工具）
             current_messages.append(
                 {
                     "role": "assistant",
@@ -1773,42 +1797,26 @@ def teaching_chat(workspace_id):
             # 重置full_response，用于下一次迭代
             full_response = ""
 
-        # 循环结束后，检查是否调用了 wait_user_answer
-        # 如果没有，则自动补充
-        has_wait_user_answer = any(
+        # 检查是否因为 wait_user_answer 而提前结束
+        ended_by_wait_tool = workspace.last_wait_call_id and any(
             tc.get("function", {}).get("name") == "wait_user_answer"
             for tc in all_tool_calls
         )
         
-        if not has_wait_user_answer:
-            # 生成新的 call_id
-            auto_call_id = f"call_auto_{int(time.time())}"
-            wait_tool_call = {
-                "id": auto_call_id,
-                "type": "function",
-                "function": {"name": "wait_user_answer", "arguments": "{}"},
-            }
-            wait_tool_result = {
-                "id": auto_call_id,
-                "name": "wait_user_answer",
-                "result": {"success": True, "message": "等待用户输入", "status": "waiting"},
-            }
+        # 如果本轮以 wait_user_answer 结束，保存用户消息并结束
+        if ended_by_wait_tool:
+            workspace.messages.append({"role": "user", "content": user_input})
+            # assistant 消息已在循环中保存
             
-            # 发送给前端显示
-            yield f"data: {json.dumps({'tool_call': {'name': 'wait_user_answer', 'status': 'started'}})}\n\n"
-            yield f"data: {json.dumps({'tool_call': {'name': 'wait_user_answer', 'status': 'completed', 'result': wait_tool_result['result']}})}\n\n"
+            # 更新token计数（估算）
+            workspace.token_count = sum(len(m["content"]) // 4 for m in workspace.messages)
+            workspace_manager.save_workspace(workspace)
             
-            all_tool_calls.append(wait_tool_call)
-            all_tool_results.append(wait_tool_result)
-            logger.info(f"自动补充 wait_user_answer 工具调用: {auto_call_id}")
+            yield f"data: {json.dumps({'done': True, 'token_count': workspace.token_count, 'waiting': True})}\n\n"
+            yield "data: [DONE]\n\n"
+            return
 
-        # 保存 last_wait_call_id（取最后一个 wait_user_answer 的 id）
-        for tc in reversed(all_tool_calls):
-            if tc.get("function", {}).get("name") == "wait_user_answer":
-                workspace.last_wait_call_id = tc["id"]
-                break
-
-        # 如果进行了工具调用，流式输出最后一次AI回复
+        # 如果进行了普通工具调用，流式输出最后一次AI回复
         if all_tool_calls:
             follow_up_response = ""
             for chunk in llm_service.chat_completion(

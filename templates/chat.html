@@ -800,8 +800,16 @@ async function sendTeachingMessage(message) {
                             const status = data.tool_call.status;
                             const result = data.tool_call.result;
 
-                            showToolStatus(`正在${getToolName(toolName)}...`, true);
-                            showToolCallInChat(toolName, status, result);
+                            // wait_user_answer 是特殊标记工具，不显示加载状态
+                            if (toolName === 'wait_user_answer') {
+                                if (status === 'completed') {
+                                    // 只显示完成状态，不转圈
+                                    showToolCallInChat(toolName, status, result);
+                                }
+                            } else {
+                                showToolStatus(`正在${getToolName(toolName)}...`, true);
+                                showToolCallInChat(toolName, status, result);
+                            }
                         }
                         
                         if (data.status === 'context_compressed') {
@@ -812,6 +820,12 @@ async function sendTeachingMessage(message) {
                         if (data.done) {
                             tokenCount = data.token_count || tokenCount;
                             updateContextIndicator();
+                            
+                            // 如果是等待用户输入状态，清除加载状态
+                            if (data.waiting) {
+                                isGenerating = false;
+                                showToolStatus('', false);
+                            }
                             
                             // AI回复完成后，如果有待显示的题目，则显示
                             if (window.pendingExercise) {
