@@ -5,6 +5,47 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [1.6.0] - 2026-02-16
+
+### 新增
+
+- **`wait_user_answer` 工具**：作为每轮对话的结束标记，AI必须在每轮回复的最后调用此工具。该工具不返回实际结果，仅用于记录状态并终止本轮对话，等待用户输入。
+- **答题反馈机制重构**：移除原有的文本标记 `[练习反馈]`，改为通过工具调用结果传递。用户提交答案后，前端将结果暂存为 `pendingToolResult`，并在下一次发送消息时作为 `tool_result` 字段发送给后端。后端将其构造为 `tool` 角色的消息，注入到对话上下文中，彻底杜绝提示词注入风险。
+- **持久化增强**：工作区状态新增 `last_wait_call_id` 字段，用于保存上一轮 `wait_user_answer` 的调用ID，确保答题反馈能正确匹配。该字段随工作区自动保存和加载，支持随时退出和恢复。
+- **异常对话自动清理**：加载工作区时，新增 `_sanitize_messages` 方法，自动检测并删除不完整的对话记录（如孤立的 `user` 消息、未匹配的 `tool` 消息等），提高系统鲁棒性。
+- **前端工具显示优化**：`wait_user_answer` 工具不再显示加载转圈状态，仅显示完成状态，避免用户误解。同时，新增对 `waiting: true` 状态的处理，及时清除加载提示。
+
+### 已修复
+
+- **AI连续调用 `wait_user_answer` 问题**：修复了因工具执行后返回结果导致AI误以为用户已回复，从而无限循环调用同一工具的逻辑错误。现在检测到 `wait_user_answer` 后，立即结束本轮对话，不再继续调用LLM。
+- **前端工具调用转圈后消失问题**：针对 `wait_user_answer` 特殊处理，不再显示加载状态条，只显示完成状态，避免转圈后突然消失造成的困惑。
+- **答题反馈丢失问题**：修复了因 `last_wait_call_id` 未持久化导致的答题反馈无法正确匹配上一轮工具调用的问题。
+- **异常退出导致对话记录损坏**：通过 `_sanitize_messages` 自动清理，确保重新进入工作区时对话历史完整可用。
+
+### 变更
+
+- **提示词优化**：在 `prompts.yml` 中明确要求AI在每轮回复末尾必须调用 `wait_user_answer`，且只调用一次；删除所有非标准的工具调用示例，统一使用OpenAI Function Calling规范。
+- **前端发送逻辑**：`sendTeachingMessage` 函数现在支持携带 `tool_result` 字段，与用户消息一同发送；允许空消息（仅携带 `tool_result`）以表示答题后的“继续”操作，且不显示空的用户气泡。
+- **后端消息构造**：当收到 `tool_result` 时，后端自动在历史消息后插入上一轮的 `wait_user_answer` 工具调用和对应的 `tool` 结果消息，确保LLM能正确理解上下文。
+
+### 技术细节
+
+- **后端 (app.py)**：
+  - `Workspace` 类添加 `last_wait_call_id` 字段。
+  - `ToolExecutor` 添加 `_wait_user_answer` 方法，仅记录状态，不执行实际逻辑。
+  - `teaching_chat` 路由支持接收 `tool_result`，并在构造消息列表时正确插入工具调用链。
+  - 工具调用循环中检测到 `wait_user_answer` 后立即终止本轮对话，不继续调用LLM。
+  - `save_workspace` 和 `_load_workspace_from_disk` 同步保存/加载 `last_wait_call_id`。
+  - 新增 `_sanitize_messages` 方法，用于加载工作区时清理异常消息。
+- **前端 (templates/chat.html)**：
+  - `submitExercise` 函数不再设置 `window.exerciseFeedback`，改为保存 `window.pendingToolResult`（工具结果格式）。
+  - `sendTeachingMessage` 函数将 `pendingToolResult` 作为 `tool_result` 字段发送，并在发送后清空。
+  - `sendMessage` 函数允许空消息（有 `pendingToolResult` 时），且不显示空用户气泡。
+  - 修改 `showToolCallInChat` 函数，对 `wait_user_answer` 工具特殊处理：不显示加载状态。
+- **提示词 (prompts.yml)**：
+  - 更新 `phase3_teaching` 中的工具使用规范，明确 `wait_user_answer` 的调用要求和意义。
+  - 删除所有中文格式的调用示例，改用标准OpenAI格式说明。
+
 ## [1.5.4] - 2026-02-15
 
 ### 已修复
@@ -95,11 +136,13 @@
 ### 技术细节
 
 - **流式工具调用处理重构**：
+  
   - `inquiry_chat`和`teaching_chat`都使用新的工具调用累积逻辑
   - 正确处理OpenAI流式响应中的tool_calls分片
   - 支持单个和多个工具调用
 
 - **消息格式兼容性**：
+  
   - 新增消息格式转换逻辑（`teaching_chat`中处理历史消息时）
   - 向后兼容之前保存的字符串格式tool_calls
   - 新保存的消息使用数组格式
@@ -134,12 +177,14 @@
 ### 技术细节
 
 - **后端架构改进**：
+  
   - `teaching_chat`函数实现完整的两轮LLM调用流程
   - 改进工具参数解析，支持流式接收tool_calls
   - 保存包含tool_calls的完整对话历史
   - 修复类型注解问题，`List[Dict]`改为`List[Dict[str, Any]]`
 
 - **前端优化**：
+  
   - `sendInquiryMessage`函数重构，延迟消息容器创建
   - 添加`hasContentStarted`和`endInquiryCalled`状态跟踪
   - 改进空消息检测和处理逻辑

@@ -92,53 +92,53 @@ def token_required(f):
 def clean_content(content: str) -> str:
     """
     清理内容中的DSML格式残留
-    
+
     DeepSeek模型有时会输出类似以下的格式：
     <｜DSML｜function_calls>
     <｜DSML｜invoke name="xxx">...</｜DSML｜invoke>
     </｜DSML｜function_calls>
     <function_results>...</function_results>
-    
+
     这些残留需要被过滤掉，因为工具调用应该通过OpenAI标准的tool_calls机制处理
-    
+
     Args:
         content: 原始内容
-        
+
     Returns:
         清理后的内容
     """
     if not content:
         return content
-    
+
     # 定义需要过滤的模式（按优先级排序）
     patterns = [
         # DSML function_calls 块（包括内容）
-        r'<｜DSML｜function_calls>.*?</｜DSML｜function_calls>',
+        r"<｜DSML｜function_calls>.*?</｜DSML｜function_calls>",
         # DSML 结束标签（如果开始标签缺失）
-        r'</｜DSML｜function_calls>',
+        r"</｜DSML｜function_calls>",
         # function_results 块
-        r'<function_results>.*?</function_results>',
+        r"<function_results>.*?</function_results>",
         # function_results 结束标签（如果开始标签缺失）
-        r'</function_results>',
+        r"</function_results>",
         # 单独的DSML invoke标签
-        r'<｜DSML｜invoke[^>]*>.*?</｜DSML｜invoke>',
+        r"<｜DSML｜invoke[^>]*>.*?</｜DSML｜invoke>",
         # 单独的DSML parameter标签
-        r'<｜DSML｜parameter[^/]*/>',
+        r"<｜DSML｜parameter[^/]*/>",
         # 工具调用结果标签
-        r'<result>.*?</result>',
-        r'</result>',
+        r"<result>.*?</result>",
+        r"</result>",
     ]
-    
+
     cleaned = content
     for pattern in patterns:
-        cleaned = re.sub(pattern, '', cleaned, flags=re.DOTALL)
-    
+        cleaned = re.sub(pattern, "", cleaned, flags=re.DOTALL)
+
     # 清理多余的空行（保留最多两个连续换行）
-    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
-    
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+
     # 去除首尾空白
     cleaned = cleaned.strip()
-    
+
     return cleaned
 
 
@@ -275,29 +275,31 @@ class WorkspaceManager:
         self, messages: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """清理异常的消息历史
-        
+
         检测并删除不完整的对话记录，确保：
         1. 消息以 user 消息开始（如果是空的，则保持空）
         2. 消息以 assistant 或 tool 结束
         3. 没有孤立的 tool 消息（必须有对应的 assistant tool_calls）
-        
+
         Args:
             messages: 原始消息列表
-            
+
         Returns:
             清理后的消息列表
         """
         if not messages:
             return messages
-        
+
         original_count = len(messages)
         sanitized = list(messages)  # 复制一份
-        
+
         # 规则1: 如果最后一条是 user 消息，说明 assistant 没回复完，删除它
         while sanitized and sanitized[-1].get("role") == "user":
-            logger.warning(f"删除未完成的 user 消息: {sanitized[-1].get('content', '')[:50]}...")
+            logger.warning(
+                f"删除未完成的 user 消息: {sanitized[-1].get('content', '')[:50]}..."
+            )
             sanitized.pop()
-        
+
         # 规则2: 如果最后一条是 assistant 但没有 tool_calls，
         # 且前一条是 tool，说明 tool 结果没有处理完，删除 tool 和 assistant
         while sanitized:
@@ -310,14 +312,14 @@ class WorkspaceManager:
                     sanitized.pop()  # 删除 tool
                     continue
             break
-        
+
         # 规则3: 清理孤立的 tool 消息（没有对应 assistant tool_calls 的）
         valid_tool_ids = set()
         for msg in sanitized:
             if msg.get("role") == "assistant" and msg.get("tool_calls"):
                 for tc in msg["tool_calls"]:
                     valid_tool_ids.add(tc.get("id"))
-        
+
         i = 0
         while i < len(sanitized):
             if sanitized[i].get("role") == "tool":
@@ -327,10 +329,10 @@ class WorkspaceManager:
                     sanitized.pop(i)
                     continue
             i += 1
-        
+
         if len(sanitized) != original_count:
             logger.info(f"消息历史已清理: {original_count} -> {len(sanitized)} 条消息")
-        
+
         return sanitized
 
     def get_workspace(self, workspace_id: str) -> Optional[Workspace]:
@@ -850,7 +852,7 @@ class ToolExecutor:
         self, params: Dict[str, Any], workspace: Workspace
     ) -> Dict[str, Any]:
         """等待用户回答（每轮对话结束时调用）
-        
+
         这是一个标记工具，表示AI已完成本轮回复，正在等待用户输入。
         如果用户刚刚完成了练习题，工具结果会包含答题信息。
         """
@@ -1543,29 +1545,20 @@ def teaching_chat(workspace_id):
                 del processed_msg["tool_calls"]
         messages.append(processed_msg)
 
-    # 如果有待发送的工具结果，在历史消息后添加 tool_call 和 tool 结果
+    # 如果有待发送的工具结果，找到历史消息中的占位 tool 消息并替换内容
     # 这是为了将练习反馈等系统事件注入到上下文中
     if tool_result and workspace.last_wait_call_id:
-        messages.append({
-            "role": "assistant",
-            "content": "",
-            "tool_calls": [
-                {
-                    "id": workspace.last_wait_call_id,
-                    "type": "function",
-                    "function": {
-                        "name": "wait_user_answer",
-                        "arguments": "{}"
-                    }
-                }
-            ]
-        })
-        messages.append({
-            "role": "tool",
-            "content": json.dumps(tool_result, ensure_ascii=False),
-            "tool_call_id": workspace.last_wait_call_id,
-        })
-        logger.info(f"已注入工具结果到上下文: {tool_result.get('event', 'unknown')}")
+        # 在历史消息中找到对应的 tool 消息并替换
+        for msg in messages:
+            if (
+                msg.get("role") == "tool"
+                and msg.get("tool_call_id") == workspace.last_wait_call_id
+            ):
+                msg["content"] = json.dumps(tool_result, ensure_ascii=False)
+                logger.info(
+                    f"已更新工具结果到上下文: {tool_result.get('event', 'unknown')}"
+                )
+                break
 
     messages.append({"role": "user", "content": user_input})
 
@@ -1797,10 +1790,14 @@ def teaching_chat(workspace_id):
                     # 对于 wait_user_answer，不真正执行，只记录 call_id
                     workspace.last_wait_call_id = tool_call_id
                     tool_result = {"status": "waiting", "message": "等待用户输入"}
-                    logger.info(f"AI 调用 wait_user_answer，记录 call_id: {tool_call_id}")
+                    logger.info(
+                        f"AI 调用 wait_user_answer，记录 call_id: {tool_call_id}"
+                    )
                 else:
                     try:
-                        tool_args_dict = json.loads(tool_args_str) if tool_args_str else {}
+                        tool_args_dict = (
+                            json.loads(tool_args_str) if tool_args_str else {}
+                        )
                     except json.JSONDecodeError:
                         tool_args_dict = {}
 
@@ -1808,7 +1805,7 @@ def teaching_chat(workspace_id):
                     tool_result = tool_executor.execute(
                         tool_name, tool_args_dict, workspace
                     )
-                    
+
                     # 如果工具是generate_exercise，发送练习题数据
                     if tool_name == "generate_exercise" and "exercise" in tool_result:
                         yield f"data: {json.dumps({'exercise': tool_result['exercise']})}\n\n"
@@ -1834,7 +1831,7 @@ def teaching_chat(workspace_id):
             # 如果调用了 wait_user_answer，这是本轮结束标记
             # 不再将 tool 结果加入 current_messages，避免 AI 立即继续
             if has_wait_tool:
-                # 保存 assistant 的 tool_call，但不保存 tool 结果（等待用户触发）
+                # 保存 assistant 的 tool_call
                 workspace.messages.append(
                     {
                         "role": "assistant",
@@ -1842,6 +1839,18 @@ def teaching_chat(workspace_id):
                         "tool_calls": iteration_tool_calls,
                     }
                 )
+                # 保存 tool 消息（占位，等待用户触发后更新）
+                for tool_info in iteration_tool_results:
+                    if tool_info["name"] == "wait_user_answer":
+                        workspace.messages.append(
+                            {
+                                "role": "tool",
+                                "content": json.dumps(
+                                    tool_info["result"], ensure_ascii=False
+                                ),
+                                "tool_call_id": tool_info["id"],
+                            }
+                        )
                 # 本轮结束
                 break
 
@@ -1871,16 +1880,18 @@ def teaching_chat(workspace_id):
             tc.get("function", {}).get("name") == "wait_user_answer"
             for tc in all_tool_calls
         )
-        
+
         # 如果本轮以 wait_user_answer 结束，保存用户消息并结束
         if ended_by_wait_tool:
             workspace.messages.append({"role": "user", "content": user_input})
             # assistant 消息已在循环中保存
-            
+
             # 更新token计数（估算）
-            workspace.token_count = sum(len(m["content"]) // 4 for m in workspace.messages)
+            workspace.token_count = sum(
+                len(m["content"]) // 4 for m in workspace.messages
+            )
             workspace_manager.save_workspace(workspace)
-            
+
             yield f"data: {json.dumps({'done': True, 'token_count': workspace.token_count, 'waiting': True})}\n\n"
             yield "data: [DONE]\n\n"
             return
@@ -1935,7 +1946,9 @@ def teaching_chat(workspace_id):
         else:
             # 没有工具调用，正常保存消息
             workspace.messages.append({"role": "user", "content": user_input})
-            workspace.messages.append({"role": "assistant", "content": clean_content(full_response)})
+            workspace.messages.append(
+                {"role": "assistant", "content": clean_content(full_response)}
+            )
 
         # 更新token计数（估算）
         workspace.token_count = sum(len(m["content"]) // 4 for m in workspace.messages)
