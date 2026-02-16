@@ -1762,11 +1762,13 @@ def teaching_chat(workspace_id):
                                         "arguments"
                                     ] += func["arguments"]
 
-                    # 只在第一次迭代且没有工具调用时流式输出内容
+                    # 收集AI回复内容（不管是否有工具调用）
                     content = delta.get("content", "")
-                    if content and iteration == 1 and not tool_calls_dict:
+                    if content:
                         full_response += content
-                        yield f"data: {json.dumps({'content': content})}\n\n"
+                        # 只在第一次迭代流式输出到前端
+                        if iteration == 1:
+                            yield f"data: {json.dumps({'content': content})}\n\n"
 
             # 如果没有工具调用，结束循环
             if not tool_calls_dict:
