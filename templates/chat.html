@@ -509,22 +509,23 @@ async function sendMessage(message = null, autoStart = false) {
     let userMessage = message !== null ? message : input.value.trim();
 
     // 在教学阶段，允许空消息作为"继续"的确认
-    if (currentPhase === 'teaching' && !userMessage && !autoStart) {
-        // 如果有练习反馈，使用它作为消息内容
-        if (window.exerciseFeedback) {
-            userMessage = window.exerciseFeedback;
-            window.exerciseFeedback = null; // 使用后清空
-        } else {
-            userMessage = "请继续"; // 默认的继续消息
-        }
+    // 如果有 pendingToolResult（如练习反馈），空消息表示"继续"
+    const hasToolResult = window.pendingToolResult !== null && window.pendingToolResult !== undefined;
+    if (currentPhase === 'teaching' && !userMessage && !autoStart && !hasToolResult) {
+        userMessage = "请继续"; // 默认的继续消息
     }
 
-    if (!userMessage && !autoStart) return;
+    // 允许发送空消息（当有待处理的工具结果时）
+    if (!userMessage && !autoStart && !hasToolResult) return;
 
     if (!autoStart) {
         input.value = '';
         autoResize(input);
-        appendMessage('user', userMessage);
+        // 只有当有消息内容时才显示用户消息气泡
+        // （答题后的空"继续"消息不显示）
+        if (userMessage) {
+            appendMessage('user', userMessage);
+        }
     }
 
     if (currentPhase === 'inquiry') {
@@ -743,12 +744,21 @@ async function sendTeachingMessage(message) {
     let fullResponse = '';
     let hasExercise = false;
     
+    // 如果有待发送的工具结果（如练习反馈），包含在请求中
+    const toolResult = window.pendingToolResult || null;
+    if (toolResult) {
+        window.pendingToolResult = null; // 使用后清空
+    }
+    
     try {
         const url = TokenManager.buildUrl(`/api/workspaces/${workspaceId}/chat`);
         const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: message })
+            body: JSON.stringify({ 
+                message: message,
+                tool_result: toolResult
+            })
         });
         
         const reader = response.body.getReader();
@@ -838,7 +848,8 @@ function getToolName(name) {
     const names = {
         'generate_exercise': '生成练习题',
         'web_search': '搜索网络',
-        'file_system': '操作文件'
+        'file_system': '操作文件',
+        'wait_user_answer': '等待用户输入'
     };
     return names[name] || name;
 }
@@ -1028,11 +1039,16 @@ async function submitExercise() {
         
         showExerciseResult(isCorrect, currentExercise.explanation);
         
-        // 将题目和回答情况注入上下文
-        const exerciseContext = `\n\n[练习反馈]\n题目：${currentExercise.question}\n我的答案：${answerText}\n正确答案：${currentExercise.correct_answers.join(', ')}\n回答结果：${isCorrect ? '正确' : '错误'}\n`;
-        
-        // 保存到全局变量，下次发送消息时附加
-        window.exerciseFeedback = exerciseContext;
+        // 构造工具结果格式，用于传递给 wait_user_answer
+        window.pendingToolResult = {
+            event: 'exercise_submitted',
+            exercise_id: currentExercise.id || currentExercise.exercise_id,
+            question: currentExercise.question,
+            user_answer: answerText,
+            correct_answers: currentExercise.correct_answers,
+            is_correct: isCorrect,
+            explanation: currentExercise.explanation
+        };
         
         // 显示提示，告诉用户可以点击发送按钮继续
         showNotification(`回答${isCorrect ? '正确' : '错误'}！点击发送按钮继续学习`, 'success');
