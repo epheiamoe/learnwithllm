@@ -1042,7 +1042,7 @@ function showToolCallInChat(toolName, status, result = null) {
     `;
 
     container.appendChild(toolDiv);
-    scrollToBottom();
+    // 不再自动滚动到底部，让用户可以停留在当前阅读位置
 }
 
 
@@ -1162,12 +1162,10 @@ async function submitExercise() {
         };
         
         // 显示提示，告诉用户可以点击发送按钮继续
-        showNotification(`回答${isCorrect ? '正确' : '错误'}！点击发送按钮继续学习`, 'success');
+        showNotification(`回答${isCorrect ? '正确' : '错误'}！请查看解析后继续`, 'success');
         
-        // 3秒后自动关闭模态框
-        setTimeout(() => {
-            hideExercise();
-        }, 3000);
+        // 不再自动关闭模态框，让用户有时间查看解析
+        // 用户需要手动点击"关闭"按钮或提交按钮来关闭
     } else {
         // 主观题需要AI批改
         showNotification('主观题需要AI批改，功能开发中...', 'info');

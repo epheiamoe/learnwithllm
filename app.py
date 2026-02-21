@@ -77,14 +77,19 @@ def token_required(f):
         if token == ACCESS_TOKEN:
             session["authenticated"] = True
             session.permanent = True
+            # 如果有next_url，清除它
+            if "next_url" in session:
+                session.pop("next_url")
             return f(*args, **kwargs)
 
-        # 对于API请求返回401，对于页面请求重定向到首页
+        # 对于API请求返回401，对于页面请求重定向到PIN码输入页面
         if request.is_json or request.path.startswith("/api/"):
             return jsonify(
                 {"success": False, "error": "未授权访问，请提供有效token"}
             ), 401
-        return "未授权访问，请通过正确链接访问", 401
+        # 保存原始URL到session，验证后跳转回来
+        session["next_url"] = request.url
+        return redirect(url_for("auth_page"))
 
     return decorated_function
 
@@ -1088,7 +1093,6 @@ class PromptManager:
 角色：个性化学习导师
 
 当前上下文限制：{max_context}K tokens
-Token使用情况：{token_count} / {token_threshold}
 
 ## 教学原则
 1. **循序渐进**：按照学习计划逐步推进
@@ -1162,8 +1166,21 @@ Token使用情况：{token_count} / {token_threshold}
         """获取教学阶段提示词"""
         prompt_template = self.prompts.get("phase3_teaching", {}).get("system", "")
 
+        # 注意：为了保持KV Cache优化，这里不应该替换动态变化的值
+        # 如 token_count、token_threshold 等会在每次请求时变化的值
+        # 应该从kwargs中移除这些值，使用固定值替代
+        
+        # 移除可能导致缓存失效的动态值，使用固定提示
+        stable_kwargs = kwargs.copy()
+        # token_count 和 token_threshold 会在每次请求时变化，不应放入system prompt
+        stable_kwargs.pop("token_count", None)
+        stable_kwargs.pop("token_threshold", None)
+        # 将上下文限制信息改为固定格式，不显示具体数值
+        if "max_context" in stable_kwargs:
+            stable_kwargs["max_context"] = "128"  # 使用固定值
+
         # 替换变量
-        for key, value in kwargs.items():
+        for key, value in stable_kwargs.items():
             placeholder = f"{{{key}}}"
             prompt_template = prompt_template.replace(placeholder, str(value))
 
@@ -1184,6 +1201,33 @@ prompt_manager = PromptManager()
 def index():
     """首页"""
     return render_template("index.html")
+
+
+@app.route("/auth")
+def auth_page():
+    """PIN码输入页面"""
+    # 如果已经认证，重定向到next_url或首页
+    if session.get("authenticated"):
+        next_url = session.pop("next_url", None)
+        if next_url:
+            return redirect(next_url)
+        return redirect(url_for("index"))
+    
+    # 检查URL参数中的token
+    token = request.args.get("token")
+    if token == ACCESS_TOKEN:
+        session["authenticated"] = True
+        session.permanent = True
+        next_url = session.pop("next_url", None)
+        if next_url:
+            return redirect(next_url)
+        return redirect(url_for("index"))
+    
+    # 验证失败显示错误
+    if token:
+        return render_template("auth.html", error="PIN码错误，请重试")
+    
+    return render_template("auth.html")
 
 
 @app.route("/chat/<workspace_id>")
@@ -1516,11 +1560,10 @@ def teaching_chat(workspace_id):
         available_tools += "\n- web_search: 搜索网络信息"
 
     # 使用提示词管理器构建系统提示词
+    # 注意：为了保持KV Cache优化，不传入动态变化的token计数
     max_context = config_manager.get_model_max_context(llm_service.model) // 1000
     system_prompt = prompt_manager.get_teaching_prompt(
         max_context=max_context,
-        token_count=workspace.token_count,
-        token_threshold=workspace.token_threshold,
         study_plan=study_plan,
         agent_state=agent_state,
         lesson_context=lesson_context,

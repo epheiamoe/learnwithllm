@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}输入PIN码 - AI Learning Assistant{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-icon">🔒</div>
+        <h2 class="auth-title">需要访问权限</h2>
+        <p class="auth-subtitle">请输入6位PIN码以继续访问</p>
+        
+        <div class="pin-input-group" id="pinInputGroup">
+            <input type="text" class="pin-input" maxlength="1" data-index="0" inputmode="numeric" pattern="[0-9]">
+            <input type="text" class="pin-input" maxlength="1" data-index="1" inputmode="numeric" pattern="[0-9]">
+            <input type="text" class="pin-input" maxlength="1" data-index="2" inputmode="numeric" pattern="[0-9]">
+            <input type="text" class="pin-input" maxlength="1" data-index="3" inputmode="numeric" pattern="[0-9]">
+            <input type="text" class="pin-input" maxlength="1" data-index="4" inputmode="numeric" pattern="[0-9]">
+            <input type="text" class="pin-input" maxlength="1" data-index="5" inputmode="numeric" pattern="[0-9]">
+        </div>
+        
+        <p class="auth-error" id="authError" style="display: {% if error %}block{% else %}none{% endif %};">{{ error or 'PIN码错误，请重试' }}</p>
+        
+        <button class="btn btn-primary btn-lg btn-block" onclick="submitPin()" id="submitBtn">
+            验证并继续
+        </button>
+        
+        <p class="auth-hint">
+            PIN码由服务器启动时生成，请查看启动日志或联系管理员
+        </p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// PIN码输入处理
+document.addEventListener('DOMContentLoaded', () => {
+    const inputs = document.querySelectorAll('.pin-input');
+    
+    inputs.forEach((input, index) => {
+        // 只允许输入数字
+        input.addEventListener('input', (e) => {
+            const value = e.target.value;
+            
+            // 移除非数字字符
+            if (!/^\d$/.test(value)) {
+                e.target.value = '';
+                return;
+            }
+            
+            // 自动聚焦到下一个输入框
+            if (value && index < inputs.length - 1) {
+                inputs[index + 1].focus();
+            }
+            
+            // 检查是否所有位都填满了
+            checkPinComplete();
+        });
+        
+        // 处理退格键
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Backspace' && !e.target.value && index > 0) {
+                inputs[index - 1].focus();
+            }
+        });
+        
+        // 处理粘贴
+        input.addEventListener('paste', (e) => {
+            e.preventDefault();
+            const pasteData = e.clipboardData.getData('text').trim();
+            
+            if (/^\d{6}$/.test(pasteData)) {
+                // 粘贴6位数字
+                inputs.forEach((inp, i) => {
+                    inp.value = pasteData[i];
+                });
+                inputs[inputs.length - 1].focus();
+                checkPinComplete();
+            }
+        });
+        
+        // 聚焦时选中已有内容
+        input.addEventListener('focus', () => {
+            input.select();
+        });
+    });
+    
+    // 回车提交
+    document.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            submitPin();
+        }
+    });
+});
+
+function checkPinComplete() {
+    const inputs = document.querySelectorAll('.pin-input');
+    const pin = Array.from(inputs).map(input => input.value).join('');
+    
+    if (pin.length === 6) {
+        document.getElementById('submitBtn').classList.add('ready');
+    } else {
+        document.getElementById('submitBtn').classList.remove('ready');
+    }
+}
+
+async function submitPin() {
+    const inputs = document.querySelectorAll('.pin-input');
+    const pin = Array.from(inputs).map(input => input.value).join('');
+    
+    if (pin.length !== 6) {
+        showError('请输入完整的6位PIN码');
+        return;
+    }
+    
+    // 构建带token的URL
+    const url = new URL(window.location.href);
+    url.searchParams.set('token', pin);
+    
+    // 尝试访问
+    try {
+        const response = await fetch(url, {
+            method: 'HEAD',
+            credentials: 'same-origin'
+        });
+        
+        if (response.ok || response.status === 302) {
+            // PIN码正确，跳转
+            window.location.href = url.toString();
+        } else {
+            showError('PIN码错误，请重试');
+            // 清空输入框
+            inputs.forEach(input => input.value = '');
+            inputs[0].focus();
+        }
+    } catch (error) {
+        // 如果是页面请求，直接跳转让后端验证
+        window.location.href = url.toString();
+    }
+}
+
+function showError(message) {
+    const errorEl = document.getElementById('authError');
+    errorEl.textContent = message;
+    errorEl.style.display = 'block';
+    
+    setTimeout(() => {
+        errorEl.style.display = 'none';
+    }, 3000);
+}
+</script>
+{% endblock %}
